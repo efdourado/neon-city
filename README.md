@@ -13,7 +13,7 @@ Repositório criado para o nosso projeto final da disciplina de Sistemas Multim�
 
 ## Roadmap
 
-* [ ] Etapa 1: Documentação e Protótipo
+### Etapa 1: Documentação e Protótipo
 * Fechar o documento de roteiro e narrativa.
 * Definir a síntese dos personagens e baixar os sprites.
 * Fazer no mínimo 8 storyboards da gameplay.
@@ -21,7 +21,7 @@ Repositório criado para o nosso projeto final da disciplina de Sistemas Multim�
 * Fazer a transição entre as fases e a movimentação básica, sem (ou com) colisão por enquanto.
 
 
-* [ ] Etapas 2 e 3
+### Etapas 2 e 3
 * Adicionar colisões e refinar a física do jogo.
 * Colocar os itens de coleta e os drones de patrulha.
 * Programar a lógica do Boss no final da fase 2.
