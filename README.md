@@ -26,3 +26,9 @@ Repositório criado para o nosso projeto final da disciplina de Sistemas Multim�
 * Colocar os itens de coleta e os drones de patrulha.
 * Programar a lógica do Boss no final da fase 2.
 * Dar aquele tapa no visual e colocar a trilha sonora.
+
+## Controles (atual)
+
+* Setas: mover / pular
+* Espaço: atirar
+* Enter: trocar de fase
