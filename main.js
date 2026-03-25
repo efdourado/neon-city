@@ -1,8 +1,9 @@
+import Fase1 from './scenes/Fase1.js';
 // Arquivo: main.js
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
+    width: 1024,
+    height: 768,
     physics: {
         default: "arcade",
         arcade: {
@@ -11,7 +12,8 @@ const config = {
         },
     },
     // Aqui nós passamos as classes que criamos nos outros arquivos!
-    scene: [Fase1, Fase2] 
+    scene: [Fase1] 
 };
 
 const game = new Phaser.Game(config);
+
