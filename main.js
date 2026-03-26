@@ -8,7 +8,7 @@ const config = {
         default: "arcade",
         arcade: {
             gravity: { y: 300 }, // A gravidade puxando para baixo
-            debug: false,
+            debug: true,
         },
     },
     // Aqui nós passamos as classes que criamos nos outros arquivos!

@@ -1,3 +1,4 @@
+import Player from '../entities/Player.js';
 
 export default class Fase1 extends Phaser.Scene {
   constructor () {
@@ -10,7 +11,10 @@ export default class Fase1 extends Phaser.Scene {
       this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
       this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
       this.load.spritesheet('nova', 'assets/player/Idle1.png',
-          { frameWidth: 32, frameHeight: 48 }
+          { frameWidth: 48, frameHeight: 48 }
+      );
+      this.load.spritesheet('nova_run', 'assets/player/Run1.png',
+          { frameWidth: 48, frameHeight: 48 }
       );
   }
 
@@ -27,16 +31,37 @@ export default class Fase1 extends Phaser.Scene {
     this.bg.tileScaleX = screen_width / imgWidth;
     this.bg.tileScaleY = screen_height / imgHeight;
 
-    
+    this.bg.setScrollFactor(0); 
     // cria as plataformas
     this.platforms = this.physics.add.staticGroup();
     
-    this.createPlatform(125, 650, 5);
+    this.createPlatform(125, 700, 5);
+
+    // cria os controles para o player
+    this.cursors = this.input.keyboard.createCursorKeys();
+
+    // cria o player
+    this.player = new Player(this, 100, 400);
+    this.physics.add.collider(this.player, this.platforms);
+
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    const worldWidth = 2000;
+    const worldHeight = 1200;
+    this.cameras.main.setBounds(0,0, worldWidth, worldHeight);
+    this.physics.world.setBounds(0,0, worldWidth, worldHeight);
      
   }
 
   update () {
     this.bg.tilePositionX += 0.5;
+    if(this.player) {
+      this.player.update(this.cursors);
+      this.cameras.main.scrollY = 0;
+      // morte
+      if (this.player.y > 800) {
+        this.scene.restart();
+      }
+    }
   }
 
   createPlatform(initialX, initialY, repetitions) {
