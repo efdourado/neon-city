@@ -6,8 +6,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.direction = "right";
+
     this.setCollideWorldBounds(true);
-    this.setGravityY(300);
+
+    this.setGravityY(600);
     this.setOrigin(0.5, 1);
     this.body.setSize(20,34);
     this.setScale(2);
@@ -32,37 +35,82 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         frameRate: 12,
         repeat: -1
       });
+
+      scene.anims.create({
+        key: 'walk',
+        frames: scene.anims.generateFrameNumbers('nova_walk', {start: 0, end: 5}),
+        frameRate: 8,
+        repeat: -1
+      });
+
+      scene.anims.create({
+        key: 'jump',
+        frames: scene.anims.generateFrameNumbers('jump', { start: 0, end: 3 }),
+        frameRate: 4,
+        repeat: -1
+      });
     }
   }
   update(cursors) {
     if(!cursors) return;
 
     const center = 24;
-    const playerSpeed = 300; 
+    const walkSpeed = 150;
+    const runSpeed = 300;
+    const jumpForce = -450;
+
+    let currentSpeed = walkSpeed;
+    let moveAnim = 'walk';
+
+    if (cursors.shift.isDown) {
+      currentSpeed = runSpeed;
+      moveAnim = 'run';
+    }
   
+    if(cursors.up.isDown && this.body.blocked.down) {
+      this.setVelocityY(jumpForce);
+    }
+
+    if(!this.body.blocked.down) {
+      this.play('jump', true);
+    }
+
     if(cursors.left.isDown) {
-      this.setVelocityX(-playerSpeed);
+      this.setVelocityX(-currentSpeed);
       this.setFlipX(true);
       this.displayOriginX = center + 18;
       this.body.setOffset(26,14);
       this.direction = "left";
-      this.play('run', true);
-    } else if (cursors.right.isDown) {
-      this.setVelocityX(playerSpeed);
+
+      if (this.body.blocked.down) {
+        this.play(moveAnim, true);
+      }
+    } 
+    else if (cursors.right.isDown) {
+      this.setVelocityX(currentSpeed);
       this.setFlipX(false);
       this.displayOriginX = center;
       this.body.setOffset(2,14);
       this.direction = "right";
-      this.play('run', true);
+
+      if (this.body.blocked.down) {
+        this.play(moveAnim, true);
+      }
     } else {
       this.setVelocityX(0);
-      this.play('idle', true);
+      
+      if (this.body.blocked.down) {
+        this.play('idle', true);
+      }
+
       if (this.direction == "left") {
         this.displayOriginX = center + 18;
         this.body.setOffset(26,14);
+        this.setFlipX(true);
       } else {
         this.displayOriginX = center;
         this.body.setOffset(2,14);
+        this.setFlipX(false);
       }
     }
   }

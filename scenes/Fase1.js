@@ -6,16 +6,22 @@ export default class Fase1 extends Phaser.Scene {
   }
 
   preload () {
-      this.load.image('background', 'assets/bg/Background.png');
-      this.load.image('floor_left', 'assets/tiles/Tiles/Tile (1).png');
-      this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
-      this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
-      this.load.spritesheet('nova', 'assets/player/Idle1.png',
-          { frameWidth: 48, frameHeight: 48 }
-      );
-      this.load.spritesheet('nova_run', 'assets/player/Run1.png',
-          { frameWidth: 48, frameHeight: 48 }
-      );
+    this.load.image('background', 'assets/bg/Background.png');
+    this.load.image('floor_left', 'assets/tiles/Tiles/Tile (1).png');
+    this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
+    this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
+    this.load.spritesheet('nova', 'assets/player/Idle1.png',
+        { frameWidth: 48, frameHeight: 48 }
+    );
+    this.load.spritesheet('nova_run', 'assets/player/Run1.png',
+        { frameWidth: 48, frameHeight: 48 }
+    );
+    this.load.spritesheet('nova_walk', 'assets/player/Walk1.png',
+        { frameWidth: 48, frameHeight: 48 }
+    )
+    this.load.spritesheet('jump', 'assets/player/Jump1.png',
+          { frameWidth: 48, frameHeight: 48 }  
+    );
   }
 
   create () {
