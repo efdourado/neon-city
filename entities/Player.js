@@ -1,5 +1,7 @@
+import Bullet from './Bullet.js';
 
-export default class Player extends Phaser.Physics.Arcade.Sprite {
+export default class Player extends Phaser.Physics.Arcade.Sprite 
+{
   constructor(scene, x, y) {
     super(scene, x, y, 'nova');
 
@@ -18,6 +20,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.createAnimations(scene);
 
     this.play('idle');
+
+    this.spaceBar = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
 
   createAnimations(scene) {
@@ -53,14 +57,28 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
   update(cursors) {
     if(!cursors) return;
-
+    
     const center = 24;
     const walkSpeed = 150;
     const runSpeed = 300;
-    const jumpForce = -450;
+    const jumpForce = -650;
 
     let currentSpeed = walkSpeed;
     let moveAnim = 'walk';
+
+    if(Phaser.Input.Keyboard.JustDown(this.spaceBar)) 
+    {
+      let bulletX = this.direction === 'left' ? this.x - 10 : this.x + 10;
+
+      let bullet = new Bullet(this.scene, bulletX, this.y - 35, this.direction);
+
+      this.scene.bullets.add(bullet);
+
+      const speed = this.direction === 'left' ? -1000 : 1000;
+      bullet.setVelocityX(speed);
+
+      bullet.body.setAllowGravity(false);
+    }
 
     if (cursors.shift.isDown) {
       currentSpeed = runSpeed;
