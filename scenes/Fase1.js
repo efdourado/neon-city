@@ -7,6 +7,7 @@ export default class Fase1 extends Phaser.Scene {
 
   preload () {
     this.load.image('background', 'assets/bg/Background.png');
+    this.load.image('spike', 'assets/tiles/Tiles/Spike.png');
     this.load.image('floor_left', 'assets/tiles/Tiles/Tile (1).png');
     this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
     this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
@@ -34,6 +35,8 @@ export default class Fase1 extends Phaser.Scene {
     // tamanho da tela
     this.screen_width = this.sys.game.config.width;
     this.screen_height = this.sys.game.config.height;
+    this.worldWidth = 5600;
+    this.worldHeight = 1200;
     // aqui basicamente vai criar o background de acordo com o tamanho da imagem e da tela
     this.bg = this.add.tileSprite(0, 0, this.screen_width, this.screen_height, 'background').setOrigin(0, 0);
     
@@ -50,11 +53,41 @@ export default class Fase1 extends Phaser.Scene {
       immovable: true
     });
 
+    this.maxHealth = 3;
+    this.health = this.maxHealth;
+    this.invulnerableUntil = 0;
+
     // cria as plataformas
     this.platforms = this.physics.add.staticGroup();
-    
-    this.createPlatform(125, 700, 3);
-    this.createPlatform(1050, 500, 3);
+    this.platformOccupancy = new Set();
+    this.platformTopByX = new Map();
+    this.platformTileWidth = this.textures.get('floor_mid').getSourceImage().width;
+    this.platformTileHeight = this.textures.get('floor_mid').getSourceImage().height;
+    this.spikeScale = 0.6;
+    this.spikeHitbox = {
+      insetLeft: 18,
+      insetRight: 18,
+      top: 86,
+      bottom: 6
+    };
+
+    const platformLayout = [
+      { x: 125, y: 700, repetitions: 3 },
+      { x: 1050, y: 500, repetitions: 3 },
+      { x: 2074, y: 700, repetitions: 4 },
+      { x: 3098, y: 500, repetitions: 3 },
+      { x: 4122, y: 700, repetitions: 4 },
+      { x: 4890, y: 500, repetitions: 3 }
+    ];
+
+    platformLayout.forEach(({ x, y, repetitions }) => {
+      this.createPlatform(x, y, repetitions);
+    });
+
+    this.spikes = this.physics.add.staticGroup();
+    [1306, 3098, 4378, 5146].forEach((x) => {
+      this.createSpike(x);
+    });
 
     // cria os controles para o player
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -62,18 +95,21 @@ export default class Fase1 extends Phaser.Scene {
     // cria o player
     this.player = new Player(this, 100, 400);
     this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.overlap(this.player, this.spikes, (_, spike) => {
+      this.handlePlayerDamage(spike.x);
+    });
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    const worldWidth = 2000;
-    const worldHeight = 1200;
-    this.cameras.main.setBounds(0,0, worldWidth, worldHeight);
-    this.physics.world.setBounds(0,0, worldWidth, worldHeight);
+    this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+    this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
 
     this.physics.add.collider(this.bullets, this.platforms);
 
     this.physics.add.collider(this.bullets, this.platforms, (bullet) => {
       bullet.destroy();
     });
+
+    this.createHealthBar();
      
   }
 
@@ -92,49 +128,166 @@ export default class Fase1 extends Phaser.Scene {
   }
 
   createPlatform(initialX, initialY, repetitions) {
-    // largura da plataforma
-    let platWidth = this.textures.get('floor_mid').getSourceImage().width;
-    let platHeight = this.textures.get('floor_mid').getSourceImage().height;
-    let numVerticalPlat = (this.screen_height + 1) / platHeight;
+    let platWidth = this.platformTileWidth;
+    let platHeight = this.platformTileHeight;
+    let maxVerticalSegments = 2;
 
-    for (let i = 0; i < numVerticalPlat; i++) 
+    for (let j = 0; j < repetitions; j++)
     {
-      for (let j = 0; j < repetitions; j++)
+      let x = initialX + (j * platWidth);
+      let segments = [];
+
+      for (let i = 0; i < maxVerticalSegments; i++)
       {
-        let y = initialY + (i * platHeight);      
-        let x = initialX + (j * platWidth);
-        
-        if (i === 0) 
-        {
-          if (j === 0) 
-          {
-            this.platforms.create(x, y, 'floor_left');
-          } 
-          else if (j === repetitions - 1) 
-          {
-            this.platforms.create(x, y, 'floor_right');
-          } 
-          else 
-          {
-            this.platforms.create(x, y, 'floor_mid');
-          }
-        } 
-        else 
-        {
-          if (j === 0) 
-          {
-            this.platforms.create(x, y, 'floor_bottom_left');
-          }
-          else if (j === repetitions - 1) 
-          {
-            this.platforms.create(x, y, 'floor_bottom_right');
-          }
-          else 
-          {
-            this.platforms.create(x, y, 'floor_neutral');
+        let y = initialY + (i * platHeight);
+        let occupiedKey = `${x}:${y}`;
+
+        if (y > this.worldHeight) {
+          break;
+        }
+
+        if (this.platformOccupancy.has(occupiedKey)) {
+          break;
+        }
+
+        segments.push({ x, y });
+      }
+
+      segments.forEach(({ x, y }, index) => {
+        this.platforms.create(x, y, this.getPlatformTexture(index, j, repetitions));
+        this.platformOccupancy.add(`${x}:${y}`);
+
+        if (index === 0) {
+          const platformTop = y - (platHeight / 2);
+          const currentTop = this.platformTopByX.get(x);
+
+          if (currentTop === undefined || platformTop < currentTop) {
+            this.platformTopByX.set(x, platformTop);
           }
         }
+      });
+    }
+  }
+
+  getPlatformTexture(rowIndex, columnIndex, columnCount) {
+    if (rowIndex === 0) {
+      if (columnIndex === 0) {
+        return 'floor_left';
       }
+
+      if (columnIndex === columnCount - 1) {
+        return 'floor_right';
+      }
+
+      return 'floor_mid';
+    }
+
+    if (columnIndex === 0) {
+      return 'floor_bottom_left';
+    }
+
+    if (columnIndex === columnCount - 1) {
+      return 'floor_bottom_right';
+    }
+
+    return 'floor_neutral';
+  }
+
+  createSpike(x) {
+    const platformTop = this.getPlatformTopForX(x);
+
+    if (platformTop === null) {
+      console.warn(`Spike at x=${x} has no platform support and was skipped.`);
+      return;
+    }
+
+    const spike = this.spikes.create(x, platformTop, 'spike');
+    const spikeTexture = this.textures.get('spike').getSourceImage();
+
+    spike.setOrigin(0.5, 1);
+    spike.setScale(this.spikeScale);
+    spike.refreshBody();
+
+    const hitboxWidth = Math.round(
+      spike.displayWidth - ((this.spikeHitbox.insetLeft + this.spikeHitbox.insetRight) * this.spikeScale)
+    );
+    const hitboxHeight = Math.round(
+      spike.displayHeight - ((this.spikeHitbox.top + this.spikeHitbox.bottom) * this.spikeScale)
+    );
+
+    spike.body.setSize(hitboxWidth, hitboxHeight);
+    spike.body.setOffset(
+      Math.round(this.spikeHitbox.insetLeft * this.spikeScale),
+      Math.round(this.spikeHitbox.top * this.spikeScale)
+    );
+  }
+
+  getPlatformTopForX(x) {
+    if (this.platformTopByX.has(x)) {
+      return this.platformTopByX.get(x);
+    }
+
+    return null;
+  }
+
+  createHealthBar() {
+    this.healthSegments = [];
+    this.healthLabel = this.add.text(24, 18, 'HP', {
+      fontSize: '20px',
+      color: '#ffffff'
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(20);
+
+    for (let i = 0; i < this.maxHealth; i++) {
+      const segment = this.add.rectangle(70 + (i * 46), 24, 38, 16, 0x39d353)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setStrokeStyle(2, 0xffffff)
+        .setDepth(20);
+
+      this.healthSegments.push(segment);
+    }
+
+    this.updateHealthBar();
+  }
+
+  updateHealthBar() {
+    this.healthSegments.forEach((segment, index) => {
+      segment.fillColor = index < this.health ? 0x39d353 : 0x3d3d52;
+    });
+  }
+
+  handlePlayerDamage(sourceX) {
+    const now = this.time.now;
+
+    if (now < this.invulnerableUntil) {
+      return;
+    }
+
+    this.health -= 1;
+    this.invulnerableUntil = now + 800;
+    this.updateHealthBar();
+    this.cameras.main.shake(120, 0.004);
+
+    const knockDirection = this.player.x < sourceX ? -1 : 1;
+    this.player.setVelocityX(knockDirection * 220);
+    this.player.setVelocityY(-220);
+
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0.35,
+      yoyo: true,
+      repeat: 5,
+      duration: 60,
+      onComplete: () => this.player.setAlpha(1)
+    });
+
+    if (this.health <= 0) {
+      this.time.delayedCall(150, () => {
+        this.scene.restart();
+      });
     }
   }
 }
