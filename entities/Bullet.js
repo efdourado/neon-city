@@ -1,14 +1,17 @@
 
 export default class Bullet extends Phaser.Physics.Arcade.Sprite 
 {
-  constructor(scene, x, y, direction) 
+  constructor(scene, x, y, direction, options = {}) 
   {
-    super(scene, x, y, 'nova');
+    super(scene, x, y, 'bullet1');
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
     
-    this.speed = 800;
+    this.speed = options.speed ?? 800;
+    this.maxDistance = options.maxDistance ?? scene.worldWidth;
+    this.startX = x;
+    this.owner = options.owner ?? 'player';
 
     if (direction == 'left') 
     {
@@ -22,7 +25,11 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
     }
 
     this.body.setAllowGravity(false);
-    this.body.setImmovable(true);
+    this.body.setSize(60, 24, true);
+
+    if (options.tint) {
+      this.setTint(options.tint);
+    }
 
     this.createAnimations(scene);
     this.play('bullet_anim');
@@ -31,7 +38,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
   
   createAnimations(scene) 
   {
-    if(!scene.anims.exists('bullet1')) 
+    if(!scene.anims.exists('bullet_anim')) 
     {
       scene.anims.create({
         key: 'bullet_anim',
@@ -44,7 +51,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
 
   update() 
   {
-    if(this.x < 0 || this.x > 2000) {
+    if (Math.abs(this.x - this.startX) > this.maxDistance || this.x < -50 || this.x > this.scene.worldWidth + 50) {
       this.destroy();
     }
   }
