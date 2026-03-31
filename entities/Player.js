@@ -59,7 +59,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite
     if(!cursors) return;
     
     const center = 24;
-    const walkSpeed = 200;
+    const walkSpeed = 150;
     const runSpeed = 300;
     const jumpForce = -700;
 
