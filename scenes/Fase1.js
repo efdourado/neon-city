@@ -1,6 +1,7 @@
 import Player from '../entities/Player.js';
 import Bullet from '../entities/Bullet.js';
 import Bot1 from '../entities/Bot1.js';
+import Saw from '../entities/Saw.js';
 
 export default class Fase1 extends Phaser.Scene {
   constructor () {
@@ -10,6 +11,11 @@ export default class Fase1 extends Phaser.Scene {
   preload () {
     this.load.image('background', 'assets/bg/Dark_Background.png');
     this.load.image('spike', 'assets/tiles/Tiles/Spike.png');
+    this.load.image('saw', 'assets/tiles/Objects/Saw.png');
+    this.load.image('access_card', 'assets/tiles/Objects/CartaoAcesso.png');
+    this.load.image('door_locked', 'assets/tiles/Objects/DoorLocked.png');
+    this.load.image('door_unlocked', 'assets/tiles/Objects/DoorUnlocked.png');
+    this.load.image('door_open', 'assets/tiles/Objects/DoorOpen.png');
     this.load.image('floor_left', 'assets/tiles/Tiles/Tile (1).png');
     this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
     this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
@@ -62,10 +68,21 @@ export default class Fase1 extends Phaser.Scene {
     this.bullets = this.physics.add.group();
     this.enemyBullets = this.physics.add.group();
     this.bots = this.physics.add.group();
+    this.saws = this.physics.add.group();
+    this.accessCards = this.physics.add.group({
+      allowGravity: false,
+      immovable: true
+    });
 
     this.maxHealth = 3;
     this.health = this.maxHealth;
     this.invulnerableUntil = 0;
+    this.totalAccessCards = 5;
+    this.collectedAccessCards = 0;
+    this.exitDoor = null;
+    this.exitDoorTrigger = null;
+    this.exitDoorState = 'locked';
+    this.isTransitioning = false;
 
     // cria as plataformas
     this.platforms = this.physics.add.staticGroup();
@@ -99,17 +116,63 @@ export default class Fase1 extends Phaser.Scene {
       this.createSpike(x);
     });
 
+    [
+      { x: 637, range: 92, speed: 110, direction: 1 },
+      { x: 2586, range: 180, speed: 145, direction: -1 },
+      { x: 4634, range: 180, speed: 135, direction: 1 }
+    ].forEach((config) => {
+      this.createGroundSaw(config);
+    });
+
+    [
+      { x: 1306, y: 250, range: 120, speed: 125, direction: 1 },
+      { x: 3610, y: 250, range: 150, speed: 140, direction: -1 }
+    ].forEach((config) => {
+      this.createVerticalSaw(config);
+    });
+
+    [381, 1562, 2330, 3610, 4890].forEach((x) => {
+      this.createAccessCard(x);
+    });
+
+    this.createExitDoor(5402);
+
     // cria os controles para o player
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.input.keyboard.on('keydown', (event) => {
+      if (event.key === 'ç' || event.key === 'Ç') {
+        this.scene.start('Fase2');
+      }
+    });
+
+    this.handlePhase2Hotkey = (event) => {
+      if (event.key === '\u00E7' || event.key === '\u00C7') {
+        this.scene.start('Fase2');
+      }
+    };
+    this.input.keyboard.on('keydown', this.handlePhase2Hotkey);
+    this.events.once('shutdown', () => {
+      this.input.keyboard.off('keydown', this.handlePhase2Hotkey);
+    });
 
     // cria o player
     this.player = new Player(this, 100, 400);
+    this.player.setDepth(12);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.spikes, (_, spike) => {
       this.handlePlayerDamage(spike.x);
     });
+    this.physics.add.overlap(this.player, this.saws, (_, saw) => {
+      this.handlePlayerDamage(saw.x);
+    });
     this.physics.add.overlap(this.player, this.bots, (_, bot) => {
       this.handlePlayerDamage(bot.x);
+    });
+    this.physics.add.overlap(this.player, this.accessCards, (_, card) => {
+      this.collectAccessCard(card);
+    });
+    this.physics.add.overlap(this.player, this.exitDoorTrigger, (player) => {
+      this.tryEnterExitDoor(player);
     });
 
     [
@@ -144,14 +207,15 @@ export default class Fase1 extends Phaser.Scene {
     });
 
     this.createHealthBar();
+    this.createAccessCardHud();
 
 
     // adicionando a tecla ESC para voltar ao menu
     this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
   }
 
-  update () {
-    if(this.player) {
+  update (time, delta) {
+    if(this.player && !this.isTransitioning) {
       this.player.update(this.cursors);
       this.cameras.main.scrollY = 0;
       this.bg.tilePositionX = this.cameras.main.scrollX * 0.15;
@@ -177,6 +241,12 @@ export default class Fase1 extends Phaser.Scene {
     this.enemyBullets.children.iterate((bullet) => {
       if (bullet?.active) {
         bullet.update();
+      }
+    });
+
+    this.saws.children.iterate((saw) => {
+      if (saw?.active) {
+        saw.update(time, delta);
       }
     });
 
@@ -260,7 +330,6 @@ export default class Fase1 extends Phaser.Scene {
     }
 
     const spike = this.spikes.create(x, platformTop, 'spike');
-    const spikeTexture = this.textures.get('spike').getSourceImage();
 
     spike.setOrigin(0.5, 1);
     spike.setScale(this.spikeScale);
@@ -292,6 +361,118 @@ export default class Fase1 extends Phaser.Scene {
     this.bots.add(bot);
 
     return bot;
+  }
+
+  createGroundSaw(config) {
+    const platformTop = this.getPlatformTopForX(config.x);
+
+    if (platformTop === null) {
+      console.warn(`Ground saw at x=${config.x} has no platform support and was skipped.`);
+      return null;
+    }
+
+    const scale = config.scale ?? 0.16;
+    const texture = this.textures.get('saw').getSourceImage();
+    const sawY = platformTop - ((texture.height * scale) / 2) + 8;
+    const saw = new Saw(this, config.x, sawY, {
+      axis: 'horizontal',
+      speed: config.speed,
+      direction: config.direction,
+      rotationSpeed: config.rotationSpeed,
+      scale,
+      minX: config.x - (config.range ?? 120),
+      maxX: config.x + (config.range ?? 120),
+      minY: sawY,
+      maxY: sawY
+    });
+
+    this.saws.add(saw);
+    return saw;
+  }
+
+  createVerticalSaw(config) {
+    const range = config.range ?? 140;
+    const saw = new Saw(this, config.x, config.y, {
+      axis: 'vertical',
+      speed: config.speed,
+      direction: config.direction,
+      rotationSpeed: config.rotationSpeed,
+      scale: config.scale ?? 0.16,
+      minX: config.x,
+      maxX: config.x,
+      minY: config.y - range,
+      maxY: config.y + range
+    });
+
+    this.saws.add(saw);
+    return saw;
+  }
+
+  createAccessCard(x) {
+    const platformTop = this.getPlatformTopForX(x);
+
+    if (platformTop === null) {
+      console.warn(`Access card at x=${x} has no platform support and was skipped.`);
+      return null;
+    }
+
+    const scale = 0.18;
+    const texture = this.textures.get('access_card').getSourceImage();
+    const cardY = platformTop - ((texture.height * scale) / 2) - 18;
+    const card = this.accessCards.create(x, cardY, 'access_card');
+
+    card.setScale(scale);
+    card.setDepth(12);
+    card.body.setAllowGravity(false);
+    card.body.setImmovable(true);
+    card.body.setSize(
+      Math.round(card.displayWidth * 0.72),
+      Math.round(card.displayHeight * 0.8)
+    );
+    card.body.setOffset(
+      Math.round(card.displayWidth * 0.14),
+      Math.round(card.displayHeight * 0.1)
+    );
+
+    this.tweens.add({
+      targets: card,
+      y: card.y - 10,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    return card;
+  }
+
+  createExitDoor(x) {
+    const platformTop = this.getPlatformTopForX(x);
+
+    if (platformTop === null) {
+      console.warn(`Exit door at x=${x} has no platform support and was skipped.`);
+      return null;
+    }
+
+    const scale = 0.42;
+    const door = this.physics.add.staticSprite(x, platformTop, 'door_locked');
+
+    door.setOrigin(0.5, 1);
+    door.setScale(scale);
+    door.setDepth(10);
+    door.refreshBody();
+
+    this.exitDoor = door;
+    this.exitDoorTrigger = this.add.zone(
+      x,
+      platformTop - Math.round(door.displayHeight * 0.24),
+      Math.round(door.displayWidth * 0.28),
+      Math.round(door.displayHeight * 0.44)
+    );
+    this.physics.add.existing(this.exitDoorTrigger, true);
+    this.exitDoorTrigger.body.enable = false;
+
+    return door;
   }
 
   spawnEnemyBullet(x, y, direction) {
@@ -341,9 +522,90 @@ export default class Fase1 extends Phaser.Scene {
     this.updateHealthBar();
   }
 
+  createAccessCardHud() {
+    this.accessCardHudIcon = this.add.image(this.screen_width - 124, 30, 'access_card')
+      .setOrigin(0, 0.5)
+      .setScale(0.16)
+      .setScrollFactor(0)
+      .setDepth(20);
+
+    this.accessCardHudText = this.add.text(this.screen_width - 74, 18, '0/5', {
+      fontSize: '24px',
+      color: '#ffffff'
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(20);
+
+    this.updateAccessCardHud();
+  }
+
   updateHealthBar() {
     this.healthSegments.forEach((segment, index) => {
       segment.fillColor = index < this.health ? 0x39d353 : 0x3d3d52;
+    });
+  }
+
+  updateAccessCardHud() {
+    this.accessCardHudText.setText(`${this.collectedAccessCards}/${this.totalAccessCards}`);
+  }
+
+  collectAccessCard(card) {
+    if (!card?.active) {
+      return;
+    }
+
+    card.destroy();
+    this.collectedAccessCards += 1;
+    this.updateAccessCardHud();
+
+    if (this.collectedAccessCards >= this.totalAccessCards) {
+      this.unlockExitDoor();
+    }
+  }
+
+  unlockExitDoor() {
+    if (!this.exitDoor || this.exitDoorState !== 'locked') {
+      return;
+    }
+
+    this.exitDoor.setTexture('door_unlocked');
+    this.exitDoor.refreshBody();
+    this.exitDoorTrigger.body.enable = true;
+    this.exitDoorState = 'unlocked';
+  }
+
+  tryEnterExitDoor(player) {
+    if (this.isTransitioning || !this.exitDoor || this.exitDoorState !== 'unlocked') {
+      return;
+    }
+
+    this.isTransitioning = true;
+    this.exitDoorTrigger.body.enable = false;
+    this.exitDoor.setTexture('door_open');
+    this.exitDoor.refreshBody();
+    this.exitDoorState = 'open';
+
+    player.setVelocity(0, 0);
+    player.body.enable = false;
+    player.play('idle', true);
+
+    this.tweens.add({
+      targets: player,
+      x: this.exitDoor.x,
+      y: this.exitDoor.y - 6,
+      alpha: 0.15,
+      scaleX: player.scaleX * 0.7,
+      scaleY: player.scaleY * 0.7,
+      duration: 850,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.time.delayedCall(1000, () => {
+      this.cameras.main.fadeOut(250, 0, 0, 0);
+    });
+    this.time.delayedCall(1250, () => {
+      this.scene.start('Fase2');
     });
   }
 
