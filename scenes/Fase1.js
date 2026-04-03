@@ -144,7 +144,10 @@ export default class Fase1 extends Phaser.Scene {
     });
 
     this.createHealthBar();
-     
+
+
+    // adicionando a tecla ESC para voltar ao menu
+    this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
   }
 
   update () {
@@ -177,7 +180,10 @@ export default class Fase1 extends Phaser.Scene {
       }
     });
 
-  }
+    if (Phaser.Input.Keyboard.JustDown(this.keyESC)) {
+      this.scene.start('Menu');
+      return;
+  } }
 
   createPlatform(initialX, initialY, repetitions) {
     let platWidth = this.platformTileWidth;
