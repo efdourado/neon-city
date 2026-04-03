@@ -1,4 +1,5 @@
 import Menu from './scenes/Menu.js';
+import Instructions from './scenes/Instructions.js';
 import Fase1 from './scenes/Fase1.js';
 
 const config = {
@@ -6,13 +7,13 @@ const config = {
   width: 1024,
   height: 768,
   physics: {
-  default: "arcade",
-  arcade: {
-    gravity: { y: 300 },
-    debug: false,
+    default: "arcade",
+    arcade: {
+      gravity: { y: 300 },
+      debug: false,
   }, },
 
-  scene: [Menu, Fase1] 
+  scene: [Menu, Instructions, Fase1] 
 };
 
 const game = new Phaser.Game(config);
