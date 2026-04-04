@@ -1,4 +1,7 @@
 import Player from '../entities/Player.js';
+import Bullet from '../entities/Bullet.js';
+import Bot1 from '../entities/Bot1.js';
+import Saw from '../entities/Saw.js';
 
 export default class Fase2 extends Phaser.Scene {
   constructor () {
@@ -10,97 +13,421 @@ export default class Fase2 extends Phaser.Scene {
     this.load.image('floor_left', 'assets/tiles/Tiles/Tile (1).png');
     this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
     this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
-    this.load.spritesheet('nova', 'assets/player/Idle1.png',
-      { frameWidth: 48, frameHeight: 48 }
-    );
-    this.load.spritesheet('nova_run', 'assets/player/Run1.png',
-      { frameWidth: 48, frameHeight: 48 }
-    );
-    this.load.spritesheet('nova_walk', 'assets/player/Walk1.png',
-      { frameWidth: 48, frameHeight: 48 }
-    );
-    this.load.spritesheet('jump', 'assets/player/Jump1.png',
-      { frameWidth: 48, frameHeight: 48 }
-    );
-    this.load.spritesheet('bullet1', 'assets/guns/Bullets/bullet1.png',
-      { frameWidth: 231, frameHeight: 132 }
-    );
+    this.load.image('floor_neutral', 'assets/tiles/Tiles/Tile (5).png');
+    
+    this.load.image('acid', 'assets/tiles/Tiles/Acid (1).png');
+    this.load.image('box', 'assets/tiles/Objects/Box.png');
+    this.load.image('barrel', 'assets/tiles/Objects/Barrel (1).png');
+    
+    this.load.image('spike', 'assets/tiles/Tiles/Spike.png');
+    this.load.image('saw', 'assets/tiles/Objects/Saw.png');
+    this.load.image('access_card', 'assets/tiles/Objects/CartaoAcesso.png');
+    this.load.image('door_locked', 'assets/tiles/Objects/DoorLocked.png');
+    this.load.image('door_unlocked', 'assets/tiles/Objects/DoorUnlocked.png');
+    this.load.image('door_open', 'assets/tiles/Objects/DoorOpen.png');
+
+    this.load.spritesheet('nova', 'assets/player/Idle1.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('nova_run', 'assets/player/Run1.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('nova_walk', 'assets/player/Walk1.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('jump', 'assets/player/Jump1.png', { frameWidth: 48, frameHeight: 48 });
+    
+    this.load.spritesheet('bot1_idle', 'assets/bots/bot1/Idle1.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('bot1_walk', 'assets/bots/bot1/Walk1.png', { frameWidth: 48, frameHeight: 48 });
+    this.load.spritesheet('bot1_jump', 'assets/bots/bot1/Jump1.png', { frameWidth: 48, frameHeight: 48 });
+    
+    this.load.spritesheet('bullet1', 'assets/guns/Bullets/bullet1.png', { frameWidth: 231, frameHeight: 132 });
   }
 
   create () {
     this.screenWidth = Number(this.sys.game.config.width);
     this.screenHeight = Number(this.sys.game.config.height);
-    this.worldHeight = this.screenHeight;
+    this.worldHeight = 1200;
+    this.worldWidth = 5600; 
     this.backgroundScrollFactor = 0.22;
 
     const bgImage = this.textures.get('lab_background').getSourceImage();
     const bgScale = this.screenHeight / bgImage.height;
-    const scaledBackgroundWidth = bgImage.width * bgScale;
-    const scrollCoverageMargin = 1400;
-
-    // Expande o mapa o suficiente para a camera percorrer toda a largura util do fundo.
-    this.worldWidth = Math.ceil(
-      this.screenWidth + ((scaledBackgroundWidth - this.screenWidth) / this.backgroundScrollFactor) + scrollCoverageMargin
-    );
-
+    
     this.bg = this.add.tileSprite(0, 0, this.screenWidth, this.screenHeight, 'lab_background')
       .setOrigin(0, 0)
       .setScrollFactor(0);
-
     this.bg.tileScaleX = bgScale;
     this.bg.tileScaleY = bgScale;
 
     this.platforms = this.physics.add.staticGroup();
+    this.hazards = this.physics.add.staticGroup(); 
+    this.decorations = this.physics.add.staticGroup();
+    
     this.bullets = this.physics.add.group();
+    this.enemyBullets = this.physics.add.group();
+    this.bots = this.physics.add.group();
+    this.saws = this.physics.add.group();
+    this.accessCards = this.physics.add.group({ allowGravity: false, immovable: true });
+
+    this.maxHealth = 3;
+    this.health = this.maxHealth;
+    this.invulnerableUntil = 0;
+    this.totalAccessCards = 3;
+    this.collectedAccessCards = 0;
+    this.exitDoorState = 'locked';
+    this.isTransitioning = false;
+
+    this.platformOccupancy = new Set();
+    this.platformTopByX = new Map();
+    this.platformTileWidth = this.textures.get('floor_mid').getSourceImage().width;
+    this.platformTileHeight = this.textures.get('floor_mid').getSourceImage().height;
+
+    
+    this.createBoundaries();
+    
+    // ------ ácido --------------------------------------
+    for (let x = 64; x < this.worldWidth; x += 128) {
+      let acid = this.hazards.create(x, this.worldHeight - 150, 'acid').setScale(1.5).setTint(0x00ff00).setDepth(10);
+      acid.body.setSize(acid.width, acid.height - 30).setOffset(0, 30);
+    }
+    // ---------------------------------------------------
+
+    // ------ plat. --------------------------------------
+    const platformLayout = [
+      { x: 150, y: 900, repetitions: 4 },   // início
+      { x: 800, y: 750, repetitions: 3 },   // sobe
+      { x: 1350, y: 600, repetitions: 3 },  // sobe
+      { x: 1900, y: 750, repetitions: 3 },  // desce
+      { x: 2450, y: 900, repetitions: 2 },  // desce
+      { x: 2900, y: 750, repetitions: 2 },  // sobe
+      { x: 3350, y: 600, repetitions: 3 },  // sobe
+      { x: 3900, y: 450, repetitions: 2 },  // sobe
+      { x: 4350, y: 600, repetitions: 3 },  // desce
+      { x: 4900, y: 750, repetitions: 2 },  // desce
+      { x: 5300, y: 900, repetitions: 3 }   // reta final para a porta
+    ];
+
+    platformLayout.forEach(({ x, y, repetitions }) => {
+      this.createPlatform(x, y, repetitions);
+    });
+    // ---------------------------------------------------
+
+    // ------ elementos no caminho -----------------------
+
+    // decorações
+    this.createDecoration(950, 'box');
+    this.createDecoration(2000, 'barrel');
+    this.createDecoration(3500, 'box');
+
+    // inimigos
+    this.createBot({ x: 300, patrolRange: 100, direction: 'right' });
+    this.createBot({ x: 1500, patrolRange: 100, direction: 'left' });
+    this.createBot({ x: 4500, patrolRange: 100, direction: 'left' });
+
+    // serras 
+    this.createGroundSaw({ x: 4500, range: 100, speed: 130, direction: 1 });
+    this.createVerticalSaw({ x: 1260, y: 650, range: 100, speed: 150, direction: 1 });
+
+    // cards
+    this.createAccessCard(1500);
+    this.createAccessCard(2550);
+    this.createAccessCard(4000);
+    this.createAccessCard(4500);
+
+    // porta
+    this.createExitDoor(5500);
+    // ---------------------------------------------------
+
+    // ------ configurações gerais -----------------------
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
-    this.createFloor();
-
-    this.player = new Player(this, 180, 520);
+    this.player = new Player(this, 200, 700);
     this.player.setDepth(12);
 
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.collider(this.bullets, this.platforms, (bullet) => {
-      bullet.destroy();
+    this.physics.add.collider(this.player, this.decorations);
+    this.physics.add.collider(this.bots, this.platforms);
+    this.physics.add.collider(this.bullets, this.platforms, (bullet) => bullet.destroy());
+    this.physics.add.collider(this.bullets, this.decorations, (bullet) => bullet.destroy());
+    this.physics.add.collider(this.enemyBullets, this.platforms, (bullet) => bullet.destroy());
+
+    this.physics.add.overlap(this.player, this.hazards, () => { // dano ou morte
+       // morte instantânea ao cair no ácido
+       this.scene.restart();
     });
+    this.physics.add.overlap(this.player, this.saws, (_, saw) => this.handlePlayerDamage(saw.x));
+    this.physics.add.overlap(this.player, this.bots, (_, bot) => this.handlePlayerDamage(bot.x));
+    this.physics.add.overlap(this.player, this.enemyBullets, (_, bullet) => {
+      const sourceX = bullet.x;
+      bullet.destroy();
+      this.handlePlayerDamage(sourceX);
+    });
+
+    this.physics.add.overlap(this.bullets, this.bots, (bullet, bot) => {
+      bullet.destroy();
+      bot.takeDamage();
+    });
+
+    this.physics.add.overlap(this.player, this.accessCards, (_, card) => this.collectAccessCard(card));
+    this.physics.add.overlap(this.player, this.exitDoorTrigger, (player) => this.tryEnterExitDoor(player));
 
     this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
     this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(300, 0, 0, 0);
-
-    this.add.text(36, 28, 'Fase 2', {
-      fontSize: '28px',
+    
+    this.add.text(24, 20, '[2] Laboratório', {
+      fontFamily: '"Orbitron", monospace',
+      fontSize: '32px',
+      fontStyle: '700',
       color: '#ffffff'
-    })
+    }).setScrollFactor(0).setDepth(20);
+
+    this.createHealthBar();
+    this.createAccessCardHud();
+  }
+
+  createHealthBar() {
+    this.healthSegments = [];
+
+    this.add.text(24, 78, 'HP', {
+      fontFamily: '"Orbitron", monospace',
+      fontSize: '16px',
+      fontStyle: '700',
+      color: '#ffffff'
+    }).setScrollFactor(0).setDepth(20);
+
+    for (let i = 0; i < this.maxHealth; i++) {
+      const segment = this.add.rectangle(
+        70 + (i * 44),
+        82,
+        36,
+        14,
+        0x39d353
+      )
+      .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(20);
+      .setDepth(20)
+      .setStrokeStyle(1, 0xffffff, 0.2)
+      .setAlpha(0.9);
+
+      segment.setScale(1, 1.1);
+
+      this.healthSegments.push(segment);
+  } }
+  updateHealthBar() {
+    this.healthSegments.forEach((segment, index) => {
+      const isActive = index < this.health;
+
+      const targetColor = isActive ? 0x003c24 : 0x2a2a3b;
+
+      this.tweens.add({
+        targets: segment,
+        fillColor: targetColor,
+        alpha: isActive ? 1 : 0.4,
+        duration: 200,
+        ease: 'Power2'
+      });
+
+      if (!isActive) {
+        this.tweens.add({
+          targets: segment,
+          scaleX: 0.9,
+          scaleY: 0.9,
+          yoyo: true,
+          duration: 120
+  }); } }); }
+
+  createAccessCardHud() {
+    this.accessCardHud = this.add.container(24, 118).setScrollFactor(0).setDepth(20);
+
+    this.accessCardHudText = this.add.text(0, 0, `Cards Coletados: 0 de ${this.totalAccessCards}`, {
+      fontFamily: '"Orbitron", monospace',
+      fontSize: '16px',
+      fontStyle: '700',
+      color: '#c5c5c5'
+    }).setOrigin(0, 0);
+
+    this.accessCardHud.add([this.accessCardHudText]);
   }
 
-  update () {
-    if (!this.player) {
-      return;
+  collectAccessCard(card) {
+    card.destroy();
+    this.collectedAccessCards++;
+
+    const isComplete = this.collectedAccessCards >= this.totalAccessCards;
+
+    this.accessCardHudText.setText(`Cards: ${this.collectedAccessCards} de ${this.totalAccessCards}`);
+
+    this.accessCardHudText.setColor(isComplete ? '#ffffff' : '#c5c5c5');
+
+    this.tweens.add({
+      targets: this.accessCardHudText,
+      scale: 1.2,
+      duration: 120,
+      yoyo: true,
+      ease: 'Power2'
+    });
+
+    this.tweens.add({
+      targets: this.accessCardHud.list[0],
+      alpha: 1,
+      duration: 100,
+      yoyo: true
+    });
+
+    if (isComplete) {
+      this.exitDoor.setTexture('door_unlocked');
+      this.exitDoorTrigger.body.enable = true;
+      this.exitDoorState = 'unlocked';
+
+      this.tweens.add({
+        targets: this.accessCardHud,
+        scale: 1.1,
+        duration: 200,
+        yoyo: true
+  }); } }
+
+  update (time, delta) {
+    if(this.player && !this.isTransitioning) {
+      this.player.update(this.cursors);
+      this.bg.tilePositionX = this.cameras.main.scrollX * this.backgroundScrollFactor;
     }
 
-    this.player.update(this.cursors);
-    this.bg.tilePositionX = this.cameras.main.scrollX * this.backgroundScrollFactor;
+    this.bots.children.iterate((bot) => { if (bot?.active) bot.update(); });
+    this.bullets.children.iterate((bullet) => { if (bullet?.active) bullet.update(); });
+    this.enemyBullets.children.iterate((bullet) => { if (bullet?.active) bullet.update(); });
+    this.saws.children.iterate((saw) => { if (saw?.active) saw.update(time, delta); });
+
+    if (Phaser.Input.Keyboard.JustDown(this.keyESC)) {
+      this.scene.start('Menu');
+  } }
+
+  createBoundaries() { //bordas do cenário 
+    const w = this.worldWidth;
+    const h = this.worldHeight;
+    const thickness = 60;
+
+    let teto = this.add.tileSprite(w/2, thickness/2, w, thickness, 'floor_mid');
+    this.physics.add.existing(teto, true);
+    this.platforms.add(teto);
+    let chao = this.add.tileSprite(w/2, h - thickness/2, w, thickness, 'floor_mid');
+    this.physics.add.existing(chao, true);
+    this.platforms.add(chao);
+    let paredeEsq = this.add.tileSprite(thickness/2, h/2, thickness, h, 'floor_mid');
+    this.physics.add.existing(paredeEsq, true);
+    this.platforms.add(paredeEsq);
+    let paredeDir = this.add.tileSprite(w - thickness/2, h/2, thickness, h, 'floor_mid');
+    this.physics.add.existing(paredeDir, true);
+    this.platforms.add(paredeDir);
   }
 
-  createFloor() {
-    const tileWidth = this.textures.get('floor_mid').getSourceImage().width;
-    const floorY = this.screenHeight - 16;
-    const columns = Math.ceil(this.worldWidth / tileWidth);
+  createDecoration(x, key) {
+    const platformTop = this.getPlatformTopForX(x);
+    if (!platformTop) return;
+    const obj = this.decorations.create(x, platformTop, key);
+    obj.setOrigin(0.5, 1);
+    obj.setScale(0.5);
+    obj.refreshBody();
+  }
 
-    for (let i = 0; i < columns; i++) {
-      let texture = 'floor_mid';
+  createPlatform(initialX, initialY, repetitions) {
+    let platWidth = this.platformTileWidth;
+    let platHeight = this.platformTileHeight;
 
-      if (i === 0) {
-        texture = 'floor_left';
-      } else if (i === columns - 1) {
-        texture = 'floor_right';
-      }
+    for (let j = 0; j < repetitions; j++) {
+      let x = initialX + (j * platWidth);
+      let y = initialY;
 
-      this.platforms.create((tileWidth / 2) + (i * tileWidth), floorY, texture);
+      if (!this.platformOccupancy.has(`${x}:${y}`)) {
+        let texture = 'floor_mid';
+        if (j === 0) texture = 'floor_left';
+        else if (j === repetitions - 1) texture = 'floor_right';
+
+        this.platforms.create(x, y, texture);
+        this.platformOccupancy.add(`${x}:${y}`);
+
+        const platformTop = y - (platHeight / 2);
+        if (!this.platformTopByX.has(x) || platformTop < this.platformTopByX.get(x)) {
+          this.platformTopByX.set(x, platformTop);
+  } } } }
+
+  getPlatformTopForX(x) {
+    for (let offset = 0; offset < this.platformTileWidth; offset += 5) {
+      if (this.platformTopByX.has(x - offset)) return this.platformTopByX.get(x - offset);
+      if (this.platformTopByX.has(x + offset)) return this.platformTopByX.get(x + offset);
     }
+    return null;
   }
-}
+
+  createBot(config) {
+    const platformTop = this.getPlatformTopForX(config.x);
+    if (!platformTop) return null;
+    const bot = new Bot1(this, config.x, platformTop, config);
+    bot.setTint(0xffaa00); 
+    this.bots.add(bot);
+    return bot;
+  }
+
+  createGroundSaw(config) {
+    const platformTop = this.getPlatformTopForX(config.x);
+    if (!platformTop) return null;
+    const saw = new Saw(this, config.x, platformTop - 15, { axis: 'horizontal', ...config });
+    this.saws.add(saw);
+    return saw;
+  }
+
+  createVerticalSaw(config) {
+    const saw = new Saw(this, config.x, config.y, { axis: 'vertical', ...config });
+    this.saws.add(saw);
+    return saw;
+  }
+
+  createAccessCard(x) {
+    const platformTop = this.getPlatformTopForX(x);
+    if (!platformTop) return null;
+    const card = this.accessCards.create(x, platformTop - 40, 'access_card').setScale(0.18).setDepth(12);
+    this.tweens.add({ targets: card, y: card.y - 10, duration: 900, yoyo: true, repeat: -1 });
+    return card;
+  }
+
+  createExitDoor(x) {
+    const platformTop = this.getPlatformTopForX(x);
+    if (!platformTop) return null;
+    this.exitDoor = this.physics.add.staticSprite(x, platformTop, 'door_locked').setOrigin(0.5, 1).setScale(0.42).setDepth(10);
+    this.exitDoorTrigger = this.add.zone(x, platformTop - 50, 40, 60);
+    this.physics.add.existing(this.exitDoorTrigger, true);
+    this.exitDoorTrigger.body.enable = false;
+  }
+
+  tryEnterExitDoor(player) {
+    if (this.isTransitioning || this.exitDoorState !== 'unlocked') return;
+    this.isTransitioning = true;
+    this.exitDoor.setTexture('door_open');
+    player.setVelocity(0, 0);
+    player.body.enable = false;
+    player.play('idle', true);
+    
+    this.tweens.add({ targets: player, x: this.exitDoor.x, alpha: 0.15, scale: 0.7, duration: 850 });
+    this.time.delayedCall(1000, () => this.cameras.main.fadeOut(250, 0, 0, 0));
+    this.time.delayedCall(1250, () => {
+      this.scene.start('Menu'); 
+  }); }
+
+  handlePlayerDamage(sourceX) {
+    if (this.time.now < this.invulnerableUntil) return;
+    this.health--;
+    this.invulnerableUntil = this.time.now + 800;
+    this.updateHealthBar();
+    this.cameras.main.shake(120, 0.004);
+
+    const knockDirection = this.player.x < sourceX ? -1 : 1;
+    this.player.setVelocity(knockDirection * 220, -220);
+    this.tweens.add({ targets: this.player, alpha: 0.35, yoyo: true, repeat: 5, duration: 60, onComplete: () => this.player.setAlpha(1) });
+
+    if (this.health <= 0) this.time.delayedCall(150, () => this.scene.restart());
+  }
+
+  spawnEnemyBullet(x, y, direction) {
+    const bullet = new Bullet(this, x, y, direction, { owner: 'enemy', speed: 340, tint: 0xff7b7b });
+    this.enemyBullets.add(bullet);
+    bullet.body.setAllowGravity(false);
+    bullet.setVelocityX(direction === 'left' ? -340 : 340);
+    return bullet;
+} }
