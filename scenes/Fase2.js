@@ -14,18 +14,21 @@ export default class Fase2 extends Phaser.Scene {
     this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
     this.load.image('floor_right', 'assets/tiles/Tiles/Tile (3).png');
     this.load.image('floor_neutral', 'assets/tiles/Tiles/Tile (5).png');
+    this.load.image('floor_bottom_left', 'assets/tiles/Tiles/Tile (4).png');
+    this.load.image('floor_bottom_right', 'assets/tiles/Tiles/Tile (6).png');
+    this.load.image('high_left', 'assets/tiles/Tiles/Tile (13).png');
+    this.load.image('high_mid', 'assets/tiles/Tiles/Tile (14).png');
+    this.load.image('high_right', 'assets/tiles/Tiles/Tile (15).png');
 
     this.load.image('acid', 'assets/tiles/Tiles/Acid (1).png');
     this.load.image('box', 'assets/tiles/Objects/Box.png');
     this.load.image('barrel', 'assets/tiles/Objects/Barrel (1).png');
+    this.load.image('barrel_alt', 'assets/tiles/Objects/Barrel (2).png');
+    this.load.image('switch_off', 'assets/tiles/Objects/Switch (1).png');
+    this.load.image('switch_on', 'assets/tiles/Objects/Switch (2).png');
 
     this.load.image('spike', 'assets/tiles/Tiles/Spike.png');
     this.load.image('saw', 'assets/tiles/Objects/Saw.png');
-    this.load.image('access_card', 'assets/tiles/Objects/CartaoAcesso.png');
-    this.load.image('door_locked', 'assets/tiles/Objects/DoorLocked.png');
-    this.load.image('door_unlocked', 'assets/tiles/Objects/DoorUnlocked.png');
-    this.load.image('door_open', 'assets/tiles/Objects/DoorOpen.png');
-
     this.load.spritesheet('nova', 'assets/player/Idle1.png', { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('nova_run', 'assets/player/Run1.png', { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('nova_walk', 'assets/player/Walk1.png', { frameWidth: 48, frameHeight: 48 });
@@ -42,7 +45,7 @@ export default class Fase2 extends Phaser.Scene {
     this.screenWidth = Number(this.sys.game.config.width);
     this.screenHeight = Number(this.sys.game.config.height);
     this.worldHeight = 1200;
-    this.worldWidth = 5600;
+    this.worldWidth = 10400;
     this.backgroundScrollFactor = 0.22;
 
     const bgImage = this.textures.get('lab_background').getSourceImage();
@@ -57,25 +60,32 @@ export default class Fase2 extends Phaser.Scene {
     this.platforms = this.physics.add.staticGroup();
     this.hazards = this.physics.add.staticGroup();
     this.decorations = this.physics.add.staticGroup();
+    this.spikes = this.physics.add.staticGroup();
+    this.routeSwitches = this.physics.add.staticGroup();
 
     this.bullets = this.physics.add.group();
     this.enemyBullets = this.physics.add.group();
     this.bots = this.physics.add.group();
     this.saws = this.physics.add.group();
-    this.accessCards = this.physics.add.group({ allowGravity: false, immovable: true });
+    this.sawBarriers = new Map();
 
     this.maxHealth = 3;
     this.health = this.maxHealth;
     this.invulnerableUntil = 0;
-    this.totalAccessCards = 3;
-    this.collectedAccessCards = 0;
-    this.exitDoorState = 'locked';
     this.isTransitioning = false;
+    this.isRespawning = false;
 
     this.platformOccupancy = new Set();
     this.platformTopByX = new Map();
     this.platformTileWidth = this.textures.get('floor_mid').getSourceImage().width;
     this.platformTileHeight = this.textures.get('floor_mid').getSourceImage().height;
+    this.spikeScale = 0.58;
+    this.spikeHitbox = {
+      insetLeft: 18,
+      insetRight: 18,
+      top: 86,
+      bottom: 6
+    };
 
     this.createBoundaries();
 
@@ -89,58 +99,119 @@ export default class Fase2 extends Phaser.Scene {
 
     const platformLayout = [
       { x: 150, y: 900, repetitions: 4 },
-      { x: 800, y: 750, repetitions: 3 },
-      { x: 1350, y: 600, repetitions: 3 },
-      { x: 1900, y: 750, repetitions: 3 },
-      { x: 2450, y: 900, repetitions: 2 },
-      { x: 2900, y: 750, repetitions: 2 },
-      { x: 3350, y: 600, repetitions: 3 },
-      { x: 3900, y: 450, repetitions: 2 },
-      { x: 4350, y: 600, repetitions: 3 },
-      { x: 4900, y: 750, repetitions: 2 },
-      { x: 5300, y: 900, repetitions: 3 }
+
+      { x: 1280, y: 900, repetitions: 3 },
+      { x: 2048, y: 900, repetitions: 6 },
+      { x: 3840, y: 900, repetitions: 3 },
+      { x: 2048, y: 640, repetitions: 1, style: 'high' },
+      { x: 2304, y: 420, repetitions: 2, style: 'high' },
+
+      { x: 4352, y: 780, repetitions: 2 },
+      { x: 4864, y: 620, repetitions: 2, style: 'high' },
+      { x: 5376, y: 860, repetitions: 7 },
+      { x: 7424, y: 860, repetitions: 3 },
+      { x: 5632, y: 620, repetitions: 1, style: 'high' },
+      { x: 5888, y: 420, repetitions: 2, style: 'high' },
+
+      { x: 8192, y: 700, repetitions: 2, style: 'high' },
+      { x: 8704, y: 860, repetitions: 3, supportRows: 1 },
+      { x: 9472, y: 700, repetitions: 2, style: 'high' },
+      { x: 9984, y: 860, repetitions: 1, supportRows: 1 }
     ];
 
-    platformLayout.forEach(({ x, y, repetitions }) => {
-      this.createPlatform(x, y, repetitions);
+    platformLayout.forEach((config) => {
+      this.createPlatform(config);
     });
 
-    this.createDecoration(950, 'box');
-    this.createDecoration(2000, 'barrel');
-    this.createDecoration(3500, 'box');
+    [
+      { x: 2816, topY: 36, rows: 3 },
+      { x: 3072, topY: 36, rows: 3 },
+      { x: 6400, topY: -20, rows: 3 },
+      { x: 6656, topY: -20, rows: 3 }
+    ].forEach((config) => this.createSolidWall(config));
 
-    this.createBot({ x: 300, patrolRange: 100, direction: 'right' });
-    this.createBot({ x: 1500, patrolRange: 100, direction: 'left' });
-    this.createBot({ x: 4500, patrolRange: 100, direction: 'left' });
+    [
+      { x: 406, key: 'box' },
+      { x: 1792, key: 'barrel' },
+      { x: 2304, key: 'barrel_alt' },
+      { x: 3584, key: 'barrel' },
+      { x: 4864, key: 'barrel_alt' },
+      { x: 5888, key: 'barrel' },
+      { x: 7424, key: 'barrel_alt' },
+      { x: 8960, key: 'barrel' }
+    ].forEach((config) => this.createDecoration(config));
 
-    this.createGroundSaw({ x: 4500, range: 100, speed: 130, direction: 1 });
-    this.createVerticalSaw({ x: 1260, y: 650, range: 100, speed: 150, direction: 1 });
+    [
+      1536,
+      3328,
+      4608,
+      7680,
+      8960,
+      9984
+    ].forEach((x) => this.createSpike(x));
 
-    this.createAccessCard(1500);
-    this.createAccessCard(2550);
-    this.createAccessCard(4000);
-    this.createAccessCard(4500);
+    [
+      { x: 2560, barrierId: 'gate1' },
+      { x: 6144, barrierId: 'gate2' }
+    ].forEach((config) => this.createRouteSwitch(config));
 
-    this.createExitDoor(5500);
+    [
+      { x: 300, patrolRange: 90, direction: 'right' },
+      { x: 3840, patrolRange: 90, direction: 'left' },
+      { x: 7424, patrolRange: 80, direction: 'left' },
+      { x: 9984, patrolRange: 90, direction: 'left' }
+    ].forEach((config) => this.createBot(config));
+
+    [
+      { x: 3328, range: 54, speed: 135, direction: -1 },
+      { x: 7680, range: 54, speed: 150, direction: 1 },
+      { x: 8960, range: 56, speed: 155, direction: -1 }
+    ].forEach((config) => this.createGroundSaw(config));
+
+    [
+      { x: 7680, y: 560, range: 130, speed: 180, direction: 1 },
+      { x: 9216, y: 560, range: 120, speed: 185, direction: -1 }
+    ].forEach((config) => this.createVerticalSaw(config));
+
+    [
+      {
+        id: 'gate1',
+        xPositions: [3072, 3328, 3584, 3840, 4096],
+        yPositions: [520, 640, 760, 880, 1000],
+        range: 130,
+        speed: 470
+      },
+      {
+        id: 'gate2',
+        xPositions: [6656, 6912, 7168, 7424, 7680],
+        yPositions: [520, 640, 760, 880, 1000],
+        range: 130,
+        speed: 490
+      }
+    ].forEach((config) => this.createSawBarrier(config));
+
+    this.phaseStart = {
+      x: 220,
+      y: this.getPlatformTopForX(220) ?? 700
+    };
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
-    this.player = new Player(this, 200, 700);
+    this.player = new Player(this, this.phaseStart.x, this.phaseStart.y);
     this.player.setDepth(12);
 
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.player, this.decorations);
     this.physics.add.collider(this.bots, this.platforms);
     this.physics.add.collider(this.bullets, this.platforms, (bullet) => bullet.destroy());
-    this.physics.add.collider(this.bullets, this.decorations, (bullet) => bullet.destroy());
     this.physics.add.collider(this.enemyBullets, this.platforms, (bullet) => bullet.destroy());
 
-    this.physics.add.overlap(this.player, this.hazards, () => {
-      this.scene.restart();
-    });
+    this.physics.add.overlap(this.player, this.hazards, () => this.returnToPhaseStart());
+    this.physics.add.overlap(this.player, this.spikes, (_, spike) => this.handlePlayerDamage(spike.x));
     this.physics.add.overlap(this.player, this.saws, (_, saw) => this.handlePlayerDamage(saw.x));
     this.physics.add.overlap(this.player, this.bots, (_, bot) => this.handlePlayerDamage(bot.x));
+    this.physics.add.overlap(this.player, this.routeSwitches, (_, routeSwitch) => this.activateRouteSwitch(routeSwitch));
     this.physics.add.overlap(this.player, this.enemyBullets, (_, bullet) => {
       const sourceX = bullet.x;
       bullet.destroy();
@@ -152,16 +223,12 @@ export default class Fase2 extends Phaser.Scene {
       bot.takeDamage();
     });
 
-    this.physics.add.overlap(this.player, this.accessCards, (_, card) => this.collectAccessCard(card));
-    this.physics.add.overlap(this.player, this.exitDoorTrigger, (player) => this.tryEnterExitDoor(player));
-
     this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
     this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(300, 0, 0, 0);
 
     this.createHealthBar();
-    this.createAccessCardHud();
   }
 
   createHealthBar() {
@@ -193,42 +260,14 @@ export default class Fase2 extends Phaser.Scene {
     });
   }
 
-  createAccessCardHud() {
-    this.accessCardHudIcon = this.add.image(this.screenWidth - 124, 30, 'access_card')
-      .setOrigin(0, 0.5)
-      .setScale(0.16)
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.accessCardHudText = this.add.text(this.screenWidth - 74, 18, `0/${this.totalAccessCards}`, {
-      fontSize: '24px',
-      color: '#ffffff'
-    })
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(20);
-  }
-
-  collectAccessCard(card) {
-    if (!card?.active) {
-      return;
-    }
-
-    card.destroy();
-    this.collectedAccessCards += 1;
-    this.accessCardHudText.setText(`${this.collectedAccessCards}/${this.totalAccessCards}`);
-
-    if (this.collectedAccessCards >= this.totalAccessCards) {
-      this.exitDoor.setTexture('door_unlocked');
-      this.exitDoorTrigger.body.enable = true;
-      this.exitDoorState = 'unlocked';
-    }
-  }
-
   update(time, delta) {
     if (this.player && !this.isTransitioning) {
       this.player.update(this.cursors);
       this.bg.tilePositionX = this.cameras.main.scrollX * this.backgroundScrollFactor;
+
+      if (this.player.y > this.worldHeight + 120) {
+        this.returnToPhaseStart();
+      }
     }
 
     this.bots.children.iterate((bot) => {
@@ -279,43 +318,116 @@ export default class Fase2 extends Phaser.Scene {
     this.platforms.add(paredeDir);
   }
 
-  createDecoration(x, key) {
+  createDecoration(config) {
+    const x = typeof config === 'number' ? config : config.x;
+    const key = typeof config === 'string' ? config : config.key;
     const platformTop = this.getPlatformTopForX(x);
-    if (!platformTop) {
+    if (platformTop === null) {
       return;
     }
 
     const obj = this.decorations.create(x, platformTop, key);
     obj.setOrigin(0.5, 1);
-    obj.setScale(0.5);
+    obj.setScale(config.scale ?? 0.5);
     obj.refreshBody();
   }
 
-  createPlatform(initialX, initialY, repetitions) {
+  createRouteSwitch(config) {
+    const platformTop = this.getPlatformTopExactForX(config.x);
+    if (platformTop === null) {
+      return null;
+    }
+
+    const routeSwitch = this.routeSwitches.create(config.x, platformTop - 6, 'switch_off');
+    routeSwitch.setOrigin(0.5, 1);
+    routeSwitch.setScale(0.5);
+    routeSwitch.setDepth(13);
+    routeSwitch.refreshBody();
+    routeSwitch.body.setSize(
+      Math.round(routeSwitch.displayWidth * 0.7),
+      Math.round(routeSwitch.displayHeight * 0.8)
+    );
+    routeSwitch.body.setOffset(
+      Math.round(routeSwitch.displayWidth * 0.15),
+      Math.round(routeSwitch.displayHeight * 0.2)
+    );
+    routeSwitch.activated = false;
+    routeSwitch.barrierId = config.barrierId;
+
+    return routeSwitch;
+  }
+
+  createSolidWall(config) {
+    for (let row = 0; row < config.rows; row++) {
+      const y = config.topY + (row * this.platformTileHeight);
+      const wall = this.platforms.create(config.x, y, 'floor_neutral');
+      wall.body.setSize(this.platformTileWidth, this.platformTileHeight);
+      wall.body.setOffset(0, 0);
+    }
+  }
+
+  createPlatform(configOrX, initialY, repetitions) {
+    const config = typeof configOrX === 'object'
+      ? configOrX
+      : { x: configOrX, y: initialY, repetitions };
     const platWidth = this.platformTileWidth;
     const platHeight = this.platformTileHeight;
+    const supportRows = config.supportRows ?? 0;
+    const style = config.style ?? (config.y <= 640 ? 'high' : 'normal');
+    const supportStyle = config.supportStyle ?? 'support';
 
-    for (let j = 0; j < repetitions; j++) {
-      const x = initialX + (j * platWidth);
-      const y = initialY;
+    for (let j = 0; j < config.repetitions; j++) {
+      const x = config.x + (j * platWidth);
 
-      if (!this.platformOccupancy.has(`${x}:${y}`)) {
-        let texture = 'floor_mid';
-        if (j === 0) {
-          texture = 'floor_left';
-        } else if (j === repetitions - 1) {
-          texture = 'floor_right';
+      for (let rowIndex = 0; rowIndex <= supportRows; rowIndex++) {
+        const y = config.y + (rowIndex * platHeight);
+        const occupiedKey = `${x}:${y}`;
+
+        if (this.platformOccupancy.has(occupiedKey)) {
+          continue;
         }
 
-        this.platforms.create(x, y, texture);
-        this.platformOccupancy.add(`${x}:${y}`);
+        const texture = this.getPlatformTexture(
+          rowIndex === 0 ? style : supportStyle,
+          rowIndex,
+          j,
+          config.repetitions
+        );
 
-        const platformTop = y - (platHeight / 2);
-        if (!this.platformTopByX.has(x) || platformTop < this.platformTopByX.get(x)) {
-          this.platformTopByX.set(x, platformTop);
+        let tile = null;
+        if (rowIndex === 0) {
+          tile = this.platforms.create(x, y, texture);
+          if (style === 'high') {
+            tile.body.setSize(this.platformTileWidth, 131);
+            tile.body.setOffset(0, 0);
+          }
+        } else {
+          tile = this.add.image(x, y, texture);
+          tile.setOrigin(0.5, 0.5);
+          tile.setDepth(1);
+        }
+        this.platformOccupancy.add(occupiedKey);
+
+        if (rowIndex === 0) {
+          const platformTop = y - (platHeight / 2);
+          if (!this.platformTopByX.has(x) || platformTop < this.platformTopByX.get(x)) {
+            this.platformTopByX.set(x, platformTop);
+          }
         }
       }
     }
+  }
+
+  getPlatformTexture(style, rowIndex, columnIndex, columnCount) {
+    if (style === 'high' && rowIndex === 0) {
+      return 'high_mid';
+    }
+
+    if (style === 'support' || rowIndex > 0) {
+      return 'floor_neutral';
+    }
+
+    return 'floor_mid';
   }
 
   getPlatformTopForX(x) {
@@ -331,9 +443,13 @@ export default class Fase2 extends Phaser.Scene {
     return null;
   }
 
+  getPlatformTopExactForX(x) {
+    return this.platformTopByX.get(x) ?? null;
+  }
+
   createBot(config) {
     const platformTop = this.getPlatformTopForX(config.x);
-    if (!platformTop) {
+    if (platformTop === null) {
       return null;
     }
 
@@ -343,65 +459,159 @@ export default class Fase2 extends Phaser.Scene {
     return bot;
   }
 
-  createGroundSaw(config) {
-    const platformTop = this.getPlatformTopForX(config.x);
-    if (!platformTop) {
+  createSpike(x) {
+    const platformTop = this.getPlatformTopExactForX(x);
+    if (platformTop === null) {
       return null;
     }
 
-    const saw = new Saw(this, config.x, platformTop - 15, { axis: 'horizontal', ...config });
+    const spike = this.spikes.create(x, platformTop, 'spike');
+    spike.setOrigin(0.5, 1);
+    spike.setScale(this.spikeScale);
+    spike.setDepth(11);
+    spike.refreshBody();
+
+    const hitboxWidth = Math.round(
+      spike.displayWidth - ((this.spikeHitbox.insetLeft + this.spikeHitbox.insetRight) * this.spikeScale)
+    );
+    const hitboxHeight = Math.round(
+      spike.displayHeight - ((this.spikeHitbox.top + this.spikeHitbox.bottom) * this.spikeScale)
+    );
+
+    spike.body.setSize(hitboxWidth, hitboxHeight);
+    spike.body.setOffset(
+      Math.round(this.spikeHitbox.insetLeft * this.spikeScale),
+      Math.round(this.spikeHitbox.top * this.spikeScale)
+    );
+
+    return spike;
+  }
+
+  createGroundSaw(config) {
+    const platformTop = this.getPlatformTopForX(config.x);
+    if (platformTop === null) {
+      return null;
+    }
+
+    const scale = config.scale ?? 0.16;
+    const texture = this.textures.get('saw').getSourceImage();
+    const sawY = platformTop - ((texture.height * scale) / 2) - 12;
+    const range = config.range ?? 120;
+    const saw = new Saw(this, config.x, sawY, {
+      axis: 'horizontal',
+      speed: config.speed,
+      direction: config.direction,
+      rotationSpeed: config.rotationSpeed,
+      scale,
+      depth: config.depth ?? 12,
+      minX: config.x - range,
+      maxX: config.x + range,
+      minY: sawY,
+      maxY: sawY
+    });
+
     this.saws.add(saw);
     return saw;
   }
 
   createVerticalSaw(config) {
-    const saw = new Saw(this, config.x, config.y, { axis: 'vertical', ...config });
+    const range = config.range ?? 140;
+    const saw = new Saw(this, config.x, config.y, {
+      axis: 'vertical',
+      speed: config.speed,
+      direction: config.direction,
+      rotationSpeed: config.rotationSpeed,
+      scale: config.scale ?? 0.16,
+      depth: config.depth ?? 12,
+      minX: config.x,
+      maxX: config.x,
+      minY: config.y - range,
+      maxY: config.y + range
+    });
+
     this.saws.add(saw);
     return saw;
   }
 
-  createAccessCard(x) {
-    const platformTop = this.getPlatformTopForX(x);
-    if (!platformTop) {
-      return null;
-    }
+  createSawBarrier(config) {
+    const xPositions = config.xPositions ?? [config.x];
+    const barrierSaws = [];
 
-    const card = this.accessCards.create(x, platformTop - 40, 'access_card').setScale(0.18).setDepth(12);
-    this.tweens.add({ targets: card, y: card.y - 10, duration: 900, yoyo: true, repeat: -1 });
-    return card;
+    xPositions.forEach((x, columnIndex) => {
+      config.yPositions.forEach((y, index) => {
+        const saw = new Saw(this, x, y, {
+          axis: 'vertical',
+          speed: config.speed,
+          direction: (index + columnIndex) % 2 === 0 ? 1 : -1,
+          rotationSpeed: 340,
+          scale: 0.16,
+          depth: 12,
+          minX: x,
+          maxX: x,
+          minY: y - config.range,
+          maxY: y + config.range
+        });
+
+        this.saws.add(saw);
+        barrierSaws.push(saw);
+      });
+    });
+
+    this.sawBarriers.set(config.id, barrierSaws);
+    return barrierSaws;
   }
 
-  createExitDoor(x) {
-    const platformTop = this.getPlatformTopForX(x);
-    if (!platformTop) {
-      return null;
-    }
-
-    this.exitDoor = this.physics.add.staticSprite(x, platformTop, 'door_locked')
-      .setOrigin(0.5, 1)
-      .setScale(0.42)
-      .setDepth(10);
-    this.exitDoorTrigger = this.add.zone(x, platformTop - 50, 40, 60);
-    this.physics.add.existing(this.exitDoorTrigger, true);
-    this.exitDoorTrigger.body.enable = false;
-    return this.exitDoor;
-  }
-
-  tryEnterExitDoor(player) {
-    if (this.isTransitioning || this.exitDoorState !== 'unlocked') {
+  deactivateSawBarrier(barrierId) {
+    const barrierSaws = this.sawBarriers.get(barrierId);
+    if (!barrierSaws) {
       return;
     }
 
-    this.isTransitioning = true;
-    this.exitDoor.setTexture('door_open');
-    player.setVelocity(0, 0);
-    player.body.enable = false;
-    player.play('idle', true);
+    barrierSaws.forEach((saw) => {
+      if (saw?.active) {
+        saw.destroy();
+      }
+    });
 
-    this.tweens.add({ targets: player, x: this.exitDoor.x, alpha: 0.15, scale: 0.7, duration: 850 });
-    this.time.delayedCall(1000, () => this.cameras.main.fadeOut(250, 0, 0, 0));
-    this.time.delayedCall(1250, () => {
-      this.scene.start('Menu');
+    this.sawBarriers.delete(barrierId);
+  }
+
+  activateRouteSwitch(routeSwitch) {
+    if (!routeSwitch?.active || routeSwitch.activated) {
+      return;
+    }
+
+    routeSwitch.activated = true;
+    routeSwitch.setTexture('switch_on');
+    routeSwitch.refreshBody();
+    this.deactivateSawBarrier(routeSwitch.barrierId);
+    this.cameras.main.shake(160, 0.0035);
+    this.cameras.main.flash(120, 80, 255, 180);
+  }
+
+  returnToPhaseStart() {
+    if (this.isRespawning || !this.player?.body) {
+      return;
+    }
+
+    this.isRespawning = true;
+    this.health = this.maxHealth;
+    this.invulnerableUntil = this.time.now + 900;
+    this.updateHealthBar();
+    this.tweens.killTweensOf(this.player);
+    this.player.setAlpha(1);
+    this.player.setVelocity(0, 0);
+    this.cameras.main.flash(180, 0, 255, 110);
+
+    this.time.delayedCall(120, () => {
+      this.player.setPosition(this.phaseStart.x, this.phaseStart.y);
+      this.player.body.stop();
+      this.player.body.updateFromGameObject();
+      this.player.play('idle', true);
+      this.cameras.main.stopFollow();
+      this.cameras.main.setScroll(0, 0);
+      this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+      this.isRespawning = false;
     });
   }
 
