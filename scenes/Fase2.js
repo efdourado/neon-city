@@ -45,8 +45,14 @@ export default class Fase2 extends Phaser.Scene {
     this.screenWidth = Number(this.sys.game.config.width);
     this.screenHeight = Number(this.sys.game.config.height);
     this.worldHeight = 1200;
-    this.worldWidth = 10400;
+    this.worldWidth = 15000;
     this.backgroundScrollFactor = 0.22;
+    this.finalCorridorStartX = 10496;
+    this.finalCorridorFloorY = 860;
+    this.finalCorridorTriggerX = 10752;
+    this.finalCorridorExitX = 13480;
+    this.finalRunSpeed = 320;
+    this.finalCorridorSkipX = this.finalCorridorTriggerX - 320;
 
     const bgImage = this.textures.get('lab_background').getSourceImage();
     const bgScale = this.screenHeight / bgImage.height;
@@ -56,6 +62,11 @@ export default class Fase2 extends Phaser.Scene {
       .setScrollFactor(0);
     this.bg.tileScaleX = bgScale;
     this.bg.tileScaleY = bgScale;
+
+    this.autoRunGrayOverlay = this.add.rectangle(0, 0, this.screenWidth, this.screenHeight, 0x9a9a9a, 0)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(50);
 
     this.platforms = this.physics.add.staticGroup();
     this.hazards = this.physics.add.staticGroup();
@@ -74,6 +85,8 @@ export default class Fase2 extends Phaser.Scene {
     this.invulnerableUntil = 0;
     this.isTransitioning = false;
     this.isRespawning = false;
+    this.isAutoRunning = false;
+    this.isAutoRunFinishing = false;
 
     this.platformOccupancy = new Set();
     this.platformTopByX = new Map();
@@ -116,7 +129,9 @@ export default class Fase2 extends Phaser.Scene {
       { x: 8192, y: 700, repetitions: 2, style: 'high' },
       { x: 8704, y: 860, repetitions: 3, supportRows: 1 },
       { x: 9472, y: 700, repetitions: 2, style: 'high' },
-      { x: 9984, y: 860, repetitions: 1, supportRows: 1 }
+      { x: 9984, y: 860, repetitions: 1, supportRows: 1 },
+      { x: this.finalCorridorStartX, y: 860, repetitions: 14, supportRows: 1 },
+      { x: this.finalCorridorStartX, y: 420, repetitions: 14, style: 'high' }
     ];
 
     platformLayout.forEach((config) => {
@@ -127,7 +142,8 @@ export default class Fase2 extends Phaser.Scene {
       { x: 2816, topY: 36, rows: 3 },
       { x: 3072, topY: 36, rows: 3 },
       { x: 6400, topY: -20, rows: 3 },
-      { x: 6656, topY: -20, rows: 3 }
+      { x: 6656, topY: -20, rows: 3 },
+      { x: 10240, topY: 36, rows: 5, skipRows: [2, 3] }
     ].forEach((config) => this.createSolidWall(config));
 
     [
@@ -197,6 +213,7 @@ export default class Fase2 extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyMenu = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.keySkipToCorridor = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
 
     this.player = new Player(this, this.phaseStart.x, this.phaseStart.y);
     this.player.setDepth(12);
@@ -228,6 +245,7 @@ export default class Fase2 extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.fadeIn(300, 0, 0, 0);
 
+    this.createFinalCorridorTrigger();
     this.createHealthBar();
   }
 
@@ -261,12 +279,17 @@ export default class Fase2 extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.player && !this.isTransitioning) {
-      this.player.update(this.cursors);
+    if (this.player) {
       this.bg.tilePositionX = this.cameras.main.scrollX * this.backgroundScrollFactor;
 
-      if (this.player.y > this.worldHeight + 120) {
-        this.restartPhase();
+      if (this.isAutoRunning) {
+        this.updateFinalCorridorRun();
+      } else if (!this.isTransitioning) {
+        this.player.update(this.cursors);
+
+        if (this.player.y > this.worldHeight + 120) {
+          this.restartPhase();
+        }
       }
     }
 
@@ -291,7 +314,11 @@ export default class Fase2 extends Phaser.Scene {
       }
     });
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
+    if (!this.isAutoRunning && !this.isTransitioning && Phaser.Input.Keyboard.JustDown(this.keySkipToCorridor)) {
+      this.jumpToFinalCorridor();
+    }
+
+    if (!this.isAutoRunning && Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
       this.scene.start('Menu');
     }
   }
@@ -357,8 +384,134 @@ export default class Fase2 extends Phaser.Scene {
     return routeSwitch;
   }
 
+  createFinalCorridorTrigger() {
+    const corridorTop = this.finalCorridorFloorY - (this.platformTileHeight / 2);
+    const trigger = this.add.zone(this.finalCorridorTriggerX, corridorTop - 18, 260, 260);
+    this.physics.add.existing(trigger, true);
+
+    this.finalCorridorTrigger = trigger;
+    this.physics.add.overlap(this.player, trigger, () => this.startFinalCorridorSequence());
+    return trigger;
+  }
+
+  jumpToFinalCorridor() {
+    if (!this.player?.body) {
+      return;
+    }
+
+    const targetY = this.finalCorridorFloorY - (this.platformTileHeight / 2);
+    this.player.setPosition(this.finalCorridorSkipX, targetY);
+    this.player.setVelocity(0, 0);
+    this.player.body.stop();
+    this.player.body.updateFromGameObject();
+    this.player.setFlipX(false);
+    this.player.displayOriginX = 24;
+    this.player.body.setOffset(2, 14);
+    this.player.direction = 'right';
+    this.player.play('idle', true);
+    this.cameras.main.flash(120, 180, 220, 255);
+  }
+
+  startFinalCorridorSequence() {
+    if (this.isAutoRunning || this.isTransitioning || !this.player?.body) {
+      return;
+    }
+
+    this.isAutoRunning = true;
+    this.isAutoRunFinishing = false;
+    this.invulnerableUntil = Number.MAX_SAFE_INTEGER;
+    this.bullets.clear(true, true);
+    this.enemyBullets.clear(true, true);
+    this.player.setVelocityY(0);
+    this.player.setFlipX(false);
+    this.player.displayOriginX = 24;
+    this.player.body.setOffset(2, 14);
+    this.player.direction = 'right';
+    this.cameras.main.flash(160, 255, 255, 255);
+    this.tweens.killTweensOf(this.cameras.main);
+    this.autoRunGrayOverlay.setAlpha(0.08);
+    this.cameras.main.setZoom(1);
+    this.tweens.add({
+      targets: this.cameras.main,
+      zoom: 1.28,
+      duration: 260,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      hold: 160,
+      onComplete: () => {
+        if (!this.isTransitioning) {
+          this.cameras.main.setZoom(1.14);
+        }
+      }
+    });
+
+    if (this.finalCorridorTrigger?.body) {
+      this.finalCorridorTrigger.body.enable = false;
+    }
+  }
+
+  updateFinalCorridorRun() {
+    if (!this.player?.body) {
+      return;
+    }
+
+    this.player.setVelocityX(this.finalRunSpeed);
+    this.player.setFlipX(false);
+    this.player.displayOriginX = 24;
+    this.player.body.setOffset(2, 14);
+    this.player.direction = 'right';
+
+    const runProgress = Phaser.Math.Clamp(
+      (this.player.x - this.finalCorridorTriggerX) / (this.finalCorridorExitX - this.finalCorridorTriggerX),
+      0,
+      1
+    );
+    this.autoRunGrayOverlay.setAlpha(Phaser.Math.Linear(0.08, 0.42, runProgress));
+
+    if (this.player.body.blocked.down) {
+      this.player.play('run', true);
+    } else {
+      this.player.play('jump', true);
+    }
+
+    if (!this.isAutoRunFinishing && this.player.x >= this.finalCorridorExitX) {
+      this.finishFinalCorridorSequence();
+    }
+  }
+
+  finishFinalCorridorSequence() {
+    if (this.isAutoRunFinishing || !this.player?.body) {
+      return;
+    }
+
+    this.isAutoRunFinishing = true;
+    this.isTransitioning = true;
+    this.tweens.add({
+      targets: this.autoRunGrayOverlay,
+      alpha: 0.58,
+      duration: 260,
+      ease: 'Sine.easeInOut'
+    });
+    this.tweens.add({
+      targets: this.cameras.main,
+      zoom: 1,
+      duration: 260,
+      ease: 'Sine.easeInOut'
+    });
+    this.cameras.main.fadeOut(520, 145, 145, 145);
+    this.time.delayedCall(560, () => {
+      this.scene.start('FaseFinal');
+    });
+  }
+
   createSolidWall(config) {
+    const skipRows = new Set(config.skipRows ?? []);
+
     for (let row = 0; row < config.rows; row++) {
+      if (skipRows.has(row)) {
+        continue;
+      }
+
       const y = config.topY + (row * this.platformTileHeight);
       const wall = this.platforms.create(config.x, y, 'floor_neutral');
       wall.body.setSize(this.platformTileWidth, this.platformTileHeight);
@@ -606,7 +759,7 @@ export default class Fase2 extends Phaser.Scene {
   }
 
   handlePlayerDamage(sourceX) {
-    if (this.time.now < this.invulnerableUntil) {
+    if (this.isAutoRunning || this.isTransitioning || this.time.now < this.invulnerableUntil) {
       return;
     }
 
