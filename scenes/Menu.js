@@ -253,19 +253,29 @@ export default class Menu extends Phaser.Scene {
     // ---------------------------------------------------
     
     // ------ teclado ------------------------------------
-    this.input.keyboard.on('keydown-UP', () => {
+    this.handleUpKey = () => {
       const newIndex = selectedIndex > 0 ? selectedIndex - 1 : menuItems.length - 1;
       this.selectMenuItem(newIndex);
-    });
-    this.input.keyboard.on('keydown-DOWN', () => {
+    };
+    this.handleDownKey = () => {
       const newIndex = selectedIndex < menuItems.length - 1 ? selectedIndex + 1 : 0;
       this.selectMenuItem(newIndex);
-    });    
-    this.input.keyboard.on('keydown-ENTER', () => {
+    };
+    this.handleEnterKey = () => {
       this.activateOption(menuItems[selectedIndex].key);
-    });    
-    this.input.keyboard.on('keydown-I', () => {
+    };
+    this.handleInstructionsKey = () => {
       this.activateOption('instructions');
+    };
+    this.input.keyboard.on('keydown-UP', this.handleUpKey);
+    this.input.keyboard.on('keydown-DOWN', this.handleDownKey);
+    this.input.keyboard.on('keydown-ENTER', this.handleEnterKey);
+    this.input.keyboard.on('keydown-I', this.handleInstructionsKey);
+    this.events.once('shutdown', () => {
+      this.input.keyboard.off('keydown-UP', this.handleUpKey);
+      this.input.keyboard.off('keydown-DOWN', this.handleDownKey);
+      this.input.keyboard.off('keydown-ENTER', this.handleEnterKey);
+      this.input.keyboard.off('keydown-I', this.handleInstructionsKey);
     });
     // ---------------------------------------------------
 

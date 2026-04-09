@@ -139,12 +139,6 @@ export default class Fase1 extends Phaser.Scene {
 
     // cria os controles para o player
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.input.keyboard.on('keydown', (event) => {
-      if (event.key === 'ç' || event.key === 'Ç') {
-        this.scene.start('Fase2');
-      }
-    });
-
     this.handlePhase2Hotkey = (event) => {
       if (event.key === '\u00E7' || event.key === '\u00C7') {
         this.scene.start('Fase2');
@@ -210,8 +204,7 @@ export default class Fase1 extends Phaser.Scene {
     this.createAccessCardHud();
 
 
-    // adicionando a tecla ESC para voltar ao menu
-    this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.keyMenu = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
   }
 
   update (time, delta) {
@@ -250,7 +243,7 @@ export default class Fase1 extends Phaser.Scene {
       }
     });
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyESC)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
       this.scene.start('Menu');
       return;
   } }

@@ -196,7 +196,7 @@ export default class Fase2 extends Phaser.Scene {
     };
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keyESC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.keyMenu = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
 
     this.player = new Player(this, this.phaseStart.x, this.phaseStart.y);
     this.player.setDepth(12);
@@ -207,7 +207,7 @@ export default class Fase2 extends Phaser.Scene {
     this.physics.add.collider(this.bullets, this.platforms, (bullet) => bullet.destroy());
     this.physics.add.collider(this.enemyBullets, this.platforms, (bullet) => bullet.destroy());
 
-    this.physics.add.overlap(this.player, this.hazards, () => this.returnToPhaseStart());
+    this.physics.add.overlap(this.player, this.hazards, () => this.restartPhase());
     this.physics.add.overlap(this.player, this.spikes, (_, spike) => this.handlePlayerDamage(spike.x));
     this.physics.add.overlap(this.player, this.saws, (_, saw) => this.handlePlayerDamage(saw.x));
     this.physics.add.overlap(this.player, this.bots, (_, bot) => this.handlePlayerDamage(bot.x));
@@ -266,7 +266,7 @@ export default class Fase2 extends Phaser.Scene {
       this.bg.tilePositionX = this.cameras.main.scrollX * this.backgroundScrollFactor;
 
       if (this.player.y > this.worldHeight + 120) {
-        this.returnToPhaseStart();
+        this.restartPhase();
       }
     }
 
@@ -291,7 +291,7 @@ export default class Fase2 extends Phaser.Scene {
       }
     });
 
-    if (Phaser.Input.Keyboard.JustDown(this.keyESC)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
       this.scene.start('Menu');
     }
   }
@@ -589,29 +589,19 @@ export default class Fase2 extends Phaser.Scene {
     this.cameras.main.flash(120, 80, 255, 180);
   }
 
-  returnToPhaseStart() {
-    if (this.isRespawning || !this.player?.body) {
+  restartPhase(delay = 120) {
+    if (this.isRespawning || this.isTransitioning || !this.player) {
       return;
     }
 
     this.isRespawning = true;
-    this.health = this.maxHealth;
-    this.invulnerableUntil = this.time.now + 900;
-    this.updateHealthBar();
     this.tweens.killTweensOf(this.player);
-    this.player.setAlpha(1);
-    this.player.setVelocity(0, 0);
+    this.player?.setAlpha(1);
+    this.player?.setVelocity(0, 0);
     this.cameras.main.flash(180, 0, 255, 110);
 
-    this.time.delayedCall(120, () => {
-      this.player.setPosition(this.phaseStart.x, this.phaseStart.y);
-      this.player.body.stop();
-      this.player.body.updateFromGameObject();
-      this.player.play('idle', true);
-      this.cameras.main.stopFollow();
-      this.cameras.main.setScroll(0, 0);
-      this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-      this.isRespawning = false;
+    this.time.delayedCall(delay, () => {
+      this.scene.restart();
     });
   }
 
@@ -637,7 +627,7 @@ export default class Fase2 extends Phaser.Scene {
     });
 
     if (this.health <= 0) {
-      this.time.delayedCall(150, () => this.scene.restart());
+      this.restartPhase(150);
     }
   }
 
