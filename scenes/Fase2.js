@@ -50,7 +50,7 @@ export default class Fase2 extends Phaser.Scene {
     this.finalCorridorStartX = 10496;
     this.finalCorridorFloorY = 860;
     this.finalCorridorTriggerX = 10752;
-    this.finalCorridorExitX = 13480;
+    this.finalCorridorExitX = 13120;
     this.finalRunSpeed = 320;
     this.finalCorridorSkipX = this.finalCorridorTriggerX - 320;
 
