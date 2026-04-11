@@ -12,6 +12,7 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
     this.maxDistance = options.maxDistance ?? scene.worldWidth;
     this.startX = x;
     this.owner = options.owner ?? 'player';
+    this.damage = options.damage ?? 1;
 
     if (direction == 'left') 
     {
@@ -26,9 +27,14 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
 
     this.body.setAllowGravity(false);
     this.body.setSize(60, 24, true);
+    this.setDepth(options.depth ?? 18);
 
     if (options.tint) {
       this.setTint(options.tint);
+    }
+
+    if (this.owner !== 'player' && options.additive !== false) {
+      this.setBlendMode(Phaser.BlendModes.ADD);
     }
 
     this.createAnimations(scene);
@@ -51,7 +57,14 @@ export default class Bullet extends Phaser.Physics.Arcade.Sprite
 
   update() 
   {
-    if (Math.abs(this.x - this.startX) > this.maxDistance || this.x < -50 || this.x > this.scene.worldWidth + 50) {
+    const worldHeight = this.scene.worldHeight ?? this.scene.sys.game.config.height;
+    if (
+      Math.abs(this.x - this.startX) > this.maxDistance ||
+      this.x < -80 ||
+      this.x > this.scene.worldWidth + 80 ||
+      this.y < -120 ||
+      this.y > worldHeight + 120
+    ) {
       this.destroy();
     }
   }

@@ -14,21 +14,22 @@ Repositório criado para o nosso projeto final da disciplina de Sistemas Multim�
 ## Roadmap
 
 ### Etapa 1: Documentação e Protótipo
-* Fechar o documento de roteiro e narrativa.
-* Definir a síntese dos personagens e baixar os sprites.
-* Fazer no mínimo 8 storyboards da gameplay.
-* Implementar as duas cenas (Fase 1 nos telhados e Fase 2 no laboratório) no Phaser.
-* Fazer a transição entre as fases e a movimentação básica, sem (ou com) colisão por enquanto.
+* Fase 1 nos telhados com cartões de acesso, inimigos, hazards e porta para o laboratório.
+* Fase 2 no laboratório com switches, barreiras de serras, combate mais pesado e corrida final.
+* Transição completa: Fase 1 -> Fase 2 -> Boss Final.
 
 
 ### Etapas 2 e 3
-* Adicionar colisões e refinar a física do jogo.
-* Colocar os itens de coleta e os drones de patrulha.
-* Programar a lógica do Boss no final da fase 2.
-* Dar aquele tapa no visual e colocar a trilha sonora.
+* Colisões, física, HP, tiros do player e tiros inimigos.
+* HUD de objetivo em cada fase e overlay dev com a tecla D.
+* Boss final com teleporte, rajadas de projéteis, fase enraivecida e vitória ao claimar o Data-Core.
+* Hitboxes de física disponíveis com `?debug=1` ou `?dev=1` na URL.
 
 ## Controles (atual)
 
 * Setas: mover / pular
+* Shift: correr
 * Espaço: atirar
-* Enter: trocar de fase
+* D: status dev da fase
+* M: voltar ao menu
+* L: pular para o corredor final da Fase 2

@@ -83,6 +83,7 @@ export default class Fase1 extends Phaser.Scene {
     this.exitDoorTrigger = null;
     this.exitDoorState = 'locked';
     this.isTransitioning = false;
+    this.devOverlayVisible = false;
 
     // cria as plataformas
     this.platforms = this.physics.add.staticGroup();
@@ -170,10 +171,12 @@ export default class Fase1 extends Phaser.Scene {
     });
 
     [
-      { x: 381, patrolRange: 110, direction: 'right' },
-      { x: 2330, patrolRange: 150, direction: 'left' },
-      { x: 3354, patrolRange: 120, direction: 'right' },
-      { x: 5402, patrolRange: 90, direction: 'left' }
+      { x: 381, patrolRange: 110, direction: 'right', shotCooldownMin: 1850 },
+      { x: 1562, patrolRange: 95, direction: 'left', moveSpeed: 102, shotCooldownMin: 1700, shotCooldownMax: 2450 },
+      { x: 2330, patrolRange: 150, direction: 'left', maxHealth: 3 },
+      { x: 3354, patrolRange: 120, direction: 'right', moveSpeed: 100 },
+      { x: 4634, patrolRange: 105, direction: 'right', shotCooldownMin: 1650, shotCooldownMax: 2350 },
+      { x: 5402, patrolRange: 90, direction: 'left', maxHealth: 3, shotCooldownMin: 1600, shotCooldownMax: 2300 }
     ].forEach((config) => {
       this.createBot(config);
     });
@@ -192,7 +195,7 @@ export default class Fase1 extends Phaser.Scene {
     });
     this.physics.add.overlap(this.bullets, this.bots, (bullet, bot) => {
       bullet.destroy();
-      bot.takeDamage();
+      bot.takeDamage(bullet.damage ?? 1);
     });
     this.physics.add.overlap(this.player, this.enemyBullets, (_, bullet) => {
       const sourceX = bullet.x;
@@ -202,9 +205,13 @@ export default class Fase1 extends Phaser.Scene {
 
     this.createHealthBar();
     this.createAccessCardHud();
+    this.createObjectiveHud();
+    this.createDevOverlay();
+    this.showObjectivePulse('Colete os 5 cartões e abra a porta do laboratório.');
 
 
     this.keyMenu = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.keyDevOverlay = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
   }
 
   update (time, delta) {
@@ -246,7 +253,14 @@ export default class Fase1 extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
       this.scene.start('Menu');
       return;
-  } }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keyDevOverlay)) {
+      this.toggleDevOverlay();
+    }
+
+    this.updateDevOverlay();
+  }
 
   createPlatform(initialX, initialY, repetitions) {
     let platWidth = this.platformTileWidth;
@@ -468,18 +482,19 @@ export default class Fase1 extends Phaser.Scene {
     return door;
   }
 
-  spawnEnemyBullet(x, y, direction) {
+  spawnEnemyBullet(x, y, direction, options = {}) {
+    const speed = options.speed ?? 340;
     const bullet = new Bullet(this, x, y, direction, {
       owner: 'enemy',
-      speed: 340,
+      speed,
       maxDistance: 1100,
-      tint: 0xff7b7b
+      tint: options.tint ?? 0xff7b7b
     });
 
     this.enemyBullets.add(bullet);
     bullet.body.setAllowGravity(false);
     bullet.body.moves = true;
-    bullet.setVelocityX(direction === 'left' ? -340 : 340);
+    bullet.setVelocityX(direction === 'left' ? -speed : speed);
 
     return bullet;
   }
@@ -533,6 +548,114 @@ export default class Fase1 extends Phaser.Scene {
     this.updateAccessCardHud();
   }
 
+  createObjectiveHud() {
+    this.objectiveText = this.add.text(24, 54, '', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '18px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(22);
+
+    this.phaseBadge = this.add.text(24, 82, 'FASE 1: Telhados de Neon', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '15px',
+      color: '#7df9ff',
+      stroke: '#000000',
+      strokeThickness: 3
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(22);
+
+    this.objectivePulse = this.add.text(this.screen_width / 2, 122, '', {
+      fontFamily: '"Orbitron", monospace',
+      fontSize: '22px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center'
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(40)
+      .setAlpha(0);
+
+    this.updateObjectiveHud();
+  }
+
+  updateObjectiveHud() {
+    if (!this.objectiveText) {
+      return;
+    }
+
+    const remaining = Math.max(0, this.totalAccessCards - this.collectedAccessCards);
+    const doorText = this.exitDoorState === 'locked' ? 'porta trancada' : 'porta liberada';
+    this.objectiveText.setText(`Objetivo: ${remaining} cartoes restantes | ${doorText}`);
+  }
+
+  showObjectivePulse(message) {
+    if (!this.objectivePulse) {
+      return;
+    }
+
+    this.tweens.killTweensOf(this.objectivePulse);
+    this.objectivePulse.setText(message);
+    this.objectivePulse.setAlpha(0);
+    this.objectivePulse.setY(122);
+
+    this.tweens.add({
+      targets: this.objectivePulse,
+      alpha: 1,
+      y: 108,
+      duration: 180,
+      yoyo: true,
+      hold: 1450,
+      onComplete: () => this.objectivePulse.setAlpha(0)
+    });
+  }
+
+  createDevOverlay() {
+    this.devOverlay = this.add.text(24, 112, '', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '16px',
+      color: '#aefcff',
+      backgroundColor: 'rgba(0, 0, 0, 0.58)',
+      padding: { x: 10, y: 8 }
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(80)
+      .setVisible(false);
+  }
+
+  toggleDevOverlay() {
+    this.devOverlayVisible = !this.devOverlayVisible;
+    this.devOverlay.setVisible(this.devOverlayVisible);
+    this.updateDevOverlay();
+  }
+
+  updateDevOverlay() {
+    if (!this.devOverlayVisible || !this.devOverlay) {
+      return;
+    }
+
+    this.devOverlay.setText([
+      'DEV STATUS - FASE 1',
+      `HP Nova: ${this.health}/${this.maxHealth}`,
+      `Cartoes: ${this.collectedAccessCards}/${this.totalAccessCards}`,
+      `Porta: ${this.exitDoorState}`,
+      `Bots vivos: ${this.bots.countActive(true)}`,
+      `Tiros player/inimigo: ${this.bullets.countActive(true)}/${this.enemyBullets.countActive(true)}`,
+      `Serras: ${this.saws.countActive(true)}`,
+      `Player x/y: ${Math.round(this.player?.x ?? 0)}, ${Math.round(this.player?.y ?? 0)}`,
+      'D overlay | M menu | C cedilha pula para Fase 2'
+    ]);
+  }
+
   updateHealthBar() {
     this.healthSegments.forEach((segment, index) => {
       segment.fillColor = index < this.health ? 0x39d353 : 0x3d3d52;
@@ -551,6 +674,8 @@ export default class Fase1 extends Phaser.Scene {
     card.destroy();
     this.collectedAccessCards += 1;
     this.updateAccessCardHud();
+    this.updateObjectiveHud();
+    this.showObjectivePulse(`${this.totalAccessCards - this.collectedAccessCards} cartoes restantes.`);
 
     if (this.collectedAccessCards >= this.totalAccessCards) {
       this.unlockExitDoor();
@@ -566,6 +691,8 @@ export default class Fase1 extends Phaser.Scene {
     this.exitDoor.refreshBody();
     this.exitDoorTrigger.body.enable = true;
     this.exitDoorState = 'unlocked';
+    this.updateObjectiveHud();
+    this.showObjectivePulse('Porta liberada. Entre no laboratorio.');
   }
 
   tryEnterExitDoor(player) {
@@ -578,6 +705,8 @@ export default class Fase1 extends Phaser.Scene {
     this.exitDoor.setTexture('door_open');
     this.exitDoor.refreshBody();
     this.exitDoorState = 'open';
+    this.updateObjectiveHud();
+    this.showObjectivePulse('Laboratorio localizado. Fase 2 iniciando.');
 
     player.setVelocity(0, 0);
     player.body.enable = false;

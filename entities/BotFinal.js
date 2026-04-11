@@ -16,9 +16,14 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
     this.walkMovesBeforeWarp = config.walkMovesBeforeWarp ?? 3;
     this.walkMovesSinceWarp = 0;
     this.forceWarpDelay = config.forceWarpDelay ?? 5000;
+    this.shotCooldownMin = config.shotCooldownMin ?? 1150;
+    this.shotCooldownMax = config.shotCooldownMax ?? 1900;
+    this.enrageThreshold = config.enrageThreshold ?? 0.45;
+    this.isEnraged = false;
     this.lastWarpAt = scene.time.now;
     this.destinationX = x;
     this.nextDecisionAt = scene.time.now + 900;
+    this.nextShotAt = scene.time.now + Phaser.Math.Between(700, 1400);
     this.isWarping = false;
 
     this.setCollideWorldBounds(true);
@@ -90,9 +95,10 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
+    const effectiveWarpChance = this.isEnraged ? this.warpChance + 18 : this.warpChance;
     const shouldWarp = this.platformSegments.length > 1
       && this.walkMovesSinceWarp >= this.walkMovesBeforeWarp
-      && Phaser.Math.Between(1, 100) <= this.warpChance;
+      && Phaser.Math.Between(1, 100) <= effectiveWarpChance;
     if (shouldWarp) {
       let nextPlatformIndex = this.currentPlatformIndex;
       while (nextPlatformIndex === this.currentPlatformIndex) {
@@ -140,6 +146,7 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
         this.body.updateFromGameObject();
         this.setAlpha(1);
         this.isWarping = false;
+        this.nextShotAt = Math.min(this.nextShotAt, this.scene.time.now + 260);
       }
     });
   }
@@ -156,6 +163,9 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(0, 0);
       return;
     }
+
+    this.updateEnrage();
+    this.tryShoot(now);
 
     if (now - this.lastWarpAt >= this.forceWarpDelay) {
       let forcedPlatformIndex = this.currentPlatformIndex;
@@ -198,6 +208,58 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
     this.play('bot2_walk', true);
   }
 
+  updateEnrage() {
+    if (this.isEnraged || this.health > this.maxHealth * this.enrageThreshold) {
+      return;
+    }
+
+    this.isEnraged = true;
+    this.moveSpeed = Math.round(this.moveSpeed * 1.22);
+    this.forceWarpDelay = Math.max(2600, Math.round(this.forceWarpDelay * 0.72));
+    this.scene.cameras?.main?.shake(180, 0.004);
+  }
+
+  tryShoot(now) {
+    if (
+      now < this.nextShotAt ||
+      !this.scene.player?.body ||
+      !this.scene.spawnBossBullet ||
+      this.isWarping
+    ) {
+      return;
+    }
+
+    const player = this.scene.player;
+    const shotDirection = player.body.center.x < this.body.center.x ? 'left' : 'right';
+    const bounds = this.getBounds();
+    const bulletX = shotDirection === 'left' ? bounds.left - 18 : bounds.right + 18;
+    const burstVelocities = this.isEnraged ? [-120, 0, 120] : [-70, 70];
+    const speed = this.isEnraged ? 500 : 430;
+
+    this.direction = shotDirection;
+    this.updateFacing();
+    this.play('bot2_idle', true);
+
+    burstVelocities.forEach((velocityY, index) => {
+      this.scene.time.delayedCall(index * 105, () => {
+        if (!this.active || this.isWarping) {
+          return;
+        }
+
+        this.scene.spawnBossBullet(bulletX, this.y - 58, shotDirection, {
+          speed,
+          velocityY,
+          tint: this.isEnraged ? 0xff2d75 : 0x00ffff
+        });
+      });
+    });
+
+    const cooldownScale = this.isEnraged ? 0.68 : 1;
+    this.nextShotAt = now + Math.round(
+      Phaser.Math.Between(this.shotCooldownMin, this.shotCooldownMax) * cooldownScale
+    );
+  }
+
   updateFacing() {
     if (this.direction === 'left') {
       this.setFlipX(true);
@@ -225,6 +287,9 @@ export default class BotFinal extends Phaser.Physics.Arcade.Sprite {
     });
 
     if (this.health <= 0) {
+      if (this.scene.handleBossDefeated) {
+        this.scene.handleBossDefeated(this);
+      }
       this.destroy();
     }
 

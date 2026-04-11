@@ -114,7 +114,7 @@ export default class Instructions extends Phaser.Scene {
 
     // ------ container do texto (terminal) --------------
     const boxWidth = 900;
-    const boxHeight = 440;
+    const boxHeight = 500;
     const boxY = height / 2 - 20;
 
     this.add.rectangle(width / 2, boxY, boxWidth, boxHeight, 0x000000, 0.6)
@@ -125,12 +125,17 @@ export default class Instructions extends Phaser.Scene {
       '',
       '| Fases:',
       '  [01] Telhados de Neon (Buscar Cartões de Acesso)',
-      '  [02] Laboratório Subterrâneo (Superar Dificuldades)',
+      '  [02] Laboratório Subterrâneo (Ativar Switches)',
+      '  [03] Boss Final (Derrotar GeminiBoss e claimar o Data-Core)',
       '',
       '| Controles Importantes:',
       '  SHIFT     Corrida',
       '  ESPAÇO    Disparo',
       '  M         Menu',
+      '  D         Status dev da fase',
+      '  L         Pular para o corredor final da Fase 2',
+      '',
+      '| Dev: adicione ?debug=1 na URL para ver hitboxes da física.',
       '',
       '| Créditos: Eduardo Dourado, Henrico Costa e Cássio Rodrigues',
     ];

@@ -4,6 +4,9 @@ import Fase1 from './scenes/Fase1.js';
 import Fase2 from './scenes/Fase2.js';
 import FaseFinal from './scenes/FaseFinal.js';
 
+const urlParams = new URLSearchParams(window.location.search);
+const physicsDebug = urlParams.has('debug') || urlParams.has('dev');
+
 const config = {
   type: Phaser.AUTO,
   width: 1024,
@@ -12,8 +15,9 @@ const config = {
     default: "arcade",
     arcade: {
       gravity: { y: 300 },
-      debug: true,
-  }, },
+      debug: physicsDebug
+    }
+  },
 
   scene: [Menu, Instructions, Fase1, Fase2, FaseFinal] 
 };

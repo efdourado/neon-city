@@ -87,6 +87,9 @@ export default class Fase2 extends Phaser.Scene {
     this.isRespawning = false;
     this.isAutoRunning = false;
     this.isAutoRunFinishing = false;
+    this.devOverlayVisible = false;
+    this.totalRouteSwitches = 2;
+    this.activatedRouteSwitches = 0;
 
     this.platformOccupancy = new Set();
     this.platformTopByX = new Map();
@@ -172,10 +175,13 @@ export default class Fase2 extends Phaser.Scene {
     ].forEach((config) => this.createRouteSwitch(config));
 
     [
-      { x: 300, patrolRange: 90, direction: 'right' },
-      { x: 3840, patrolRange: 90, direction: 'left' },
-      { x: 7424, patrolRange: 80, direction: 'left' },
-      { x: 9984, patrolRange: 90, direction: 'left' }
+      { x: 300, patrolRange: 90, direction: 'right', shotCooldownMin: 1700 },
+      { x: 2048, patrolRange: 120, direction: 'right', moveSpeed: 105, shotCooldownMin: 1500, shotCooldownMax: 2200 },
+      { x: 3840, patrolRange: 90, direction: 'left', maxHealth: 3 },
+      { x: 5632, patrolRange: 70, direction: 'right', moveSpeed: 110, shotCooldownMin: 1450, shotCooldownMax: 2150 },
+      { x: 7424, patrolRange: 80, direction: 'left', maxHealth: 3 },
+      { x: 8704, patrolRange: 100, direction: 'right', moveSpeed: 108, shotCooldownMin: 1400, shotCooldownMax: 2050 },
+      { x: 9984, patrolRange: 90, direction: 'left', maxHealth: 3, shotCooldownMin: 1350, shotCooldownMax: 2000 }
     ].forEach((config) => this.createBot(config));
 
     [
@@ -214,6 +220,7 @@ export default class Fase2 extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keyMenu = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.keySkipToCorridor = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.keyDevOverlay = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
 
     this.player = new Player(this, this.phaseStart.x, this.phaseStart.y);
     this.player.setDepth(12);
@@ -237,7 +244,7 @@ export default class Fase2 extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.bots, (bullet, bot) => {
       bullet.destroy();
-      bot.takeDamage();
+      bot.takeDamage(bullet.damage ?? 1);
     });
 
     this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
@@ -247,6 +254,9 @@ export default class Fase2 extends Phaser.Scene {
 
     this.createFinalCorridorTrigger();
     this.createHealthBar();
+    this.createObjectiveHud();
+    this.createDevOverlay();
+    this.showObjectivePulse('Ative os switches e sobreviva ao laboratorio.');
   }
 
   createHealthBar() {
@@ -276,6 +286,116 @@ export default class Fase2 extends Phaser.Scene {
     this.healthSegments.forEach((segment, index) => {
       segment.fillColor = index < this.health ? 0x39d353 : 0x3d3d52;
     });
+  }
+
+  createObjectiveHud() {
+    this.objectiveText = this.add.text(24, 54, '', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '18px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 4
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(22);
+
+    this.phaseBadge = this.add.text(24, 82, 'FASE 2: Laboratorio Subterraneo', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '15px',
+      color: '#7df9ff',
+      stroke: '#000000',
+      strokeThickness: 3
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(22);
+
+    this.objectivePulse = this.add.text(this.screenWidth / 2, 124, '', {
+      fontFamily: '"Orbitron", monospace',
+      fontSize: '22px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 5,
+      align: 'center'
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(40)
+      .setAlpha(0);
+
+    this.updateObjectiveHud();
+  }
+
+  updateObjectiveHud() {
+    if (!this.objectiveText) {
+      return;
+    }
+
+    const gateText = this.activatedRouteSwitches >= this.totalRouteSwitches
+      ? 'corredor final liberado'
+      : `switches ${this.activatedRouteSwitches}/${this.totalRouteSwitches}`;
+    const runText = this.isAutoRunning ? 'lockdown em fuga' : gateText;
+    this.objectiveText.setText(`Objetivo: ${runText}`);
+  }
+
+  showObjectivePulse(message) {
+    if (!this.objectivePulse) {
+      return;
+    }
+
+    this.tweens.killTweensOf(this.objectivePulse);
+    this.objectivePulse.setText(message);
+    this.objectivePulse.setAlpha(0);
+    this.objectivePulse.setY(124);
+
+    this.tweens.add({
+      targets: this.objectivePulse,
+      alpha: 1,
+      y: 110,
+      duration: 180,
+      yoyo: true,
+      hold: 1450,
+      onComplete: () => this.objectivePulse.setAlpha(0)
+    });
+  }
+
+  createDevOverlay() {
+    this.devOverlay = this.add.text(24, 112, '', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '16px',
+      color: '#aefcff',
+      backgroundColor: 'rgba(0, 0, 0, 0.58)',
+      padding: { x: 10, y: 8 }
+    })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(80)
+      .setVisible(false);
+  }
+
+  toggleDevOverlay() {
+    this.devOverlayVisible = !this.devOverlayVisible;
+    this.devOverlay.setVisible(this.devOverlayVisible);
+    this.updateDevOverlay();
+  }
+
+  updateDevOverlay() {
+    if (!this.devOverlayVisible || !this.devOverlay) {
+      return;
+    }
+
+    this.devOverlay.setText([
+      'DEV STATUS - FASE 2',
+      `HP Nova: ${this.health}/${this.maxHealth}`,
+      `Switches: ${this.activatedRouteSwitches}/${this.totalRouteSwitches}`,
+      `Bots vivos: ${this.bots.countActive(true)}`,
+      `Serras: ${this.saws.countActive(true)}`,
+      `Tiros player/inimigo: ${this.bullets.countActive(true)}/${this.enemyBullets.countActive(true)}`,
+      `Auto-run: ${this.isAutoRunning ? 'sim' : 'nao'}`,
+      `Player x/y: ${Math.round(this.player?.x ?? 0)}, ${Math.round(this.player?.y ?? 0)}`,
+      'D overlay | L corredor | M menu'
+    ]);
   }
 
   update(time, delta) {
@@ -321,6 +441,12 @@ export default class Fase2 extends Phaser.Scene {
     if (!this.isAutoRunning && Phaser.Input.Keyboard.JustDown(this.keyMenu)) {
       this.scene.start('Menu');
     }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keyDevOverlay)) {
+      this.toggleDevOverlay();
+    }
+
+    this.updateDevOverlay();
   }
 
   createBoundaries() {
@@ -422,6 +548,8 @@ export default class Fase2 extends Phaser.Scene {
     this.invulnerableUntil = Number.MAX_SAFE_INTEGER;
     this.bullets.clear(true, true);
     this.enemyBullets.clear(true, true);
+    this.updateObjectiveHud();
+    this.showObjectivePulse('Lockdown ativado. Fuga automatica para a camara final.');
     this.player.setVelocityY(0);
     this.player.setFlipX(false);
     this.player.displayOriginX = 24;
@@ -431,19 +559,7 @@ export default class Fase2 extends Phaser.Scene {
     this.tweens.killTweensOf(this.cameras.main);
     this.autoRunGrayOverlay.setAlpha(0.08);
     this.cameras.main.setZoom(1);
-    this.tweens.add({
-      targets: this.cameras.main,
-      zoom: 1.28,
-      duration: 260,
-      ease: 'Sine.easeOut',
-      yoyo: true,
-      hold: 160,
-      onComplete: () => {
-        if (!this.isTransitioning) {
-          this.cameras.main.setZoom(1.14);
-        }
-      }
-    });
+    this.cameras.main.shake(220, 0.0025);
 
     if (this.finalCorridorTrigger?.body) {
       this.finalCorridorTrigger.body.enable = false;
@@ -486,18 +602,14 @@ export default class Fase2 extends Phaser.Scene {
 
     this.isAutoRunFinishing = true;
     this.isTransitioning = true;
+    this.showObjectivePulse('Camara do Data-Core localizada.');
     this.tweens.add({
       targets: this.autoRunGrayOverlay,
       alpha: 0.58,
       duration: 260,
       ease: 'Sine.easeInOut'
     });
-    this.tweens.add({
-      targets: this.cameras.main,
-      zoom: 1,
-      duration: 260,
-      ease: 'Sine.easeInOut'
-    });
+    this.cameras.main.setZoom(1);
     this.cameras.main.fadeOut(520, 145, 145, 145);
     this.time.delayedCall(560, () => {
       this.scene.start('FaseFinal');
@@ -606,8 +718,10 @@ export default class Fase2 extends Phaser.Scene {
       return null;
     }
 
-    const bot = new Bot1(this, config.x, platformTop, config);
-    bot.setTint(0xffaa00);
+    const bot = new Bot1(this, config.x, platformTop, {
+      ...config,
+      tint: config.tint ?? 0xffaa00
+    });
     this.bots.add(bot);
     return bot;
   }
@@ -738,8 +852,16 @@ export default class Fase2 extends Phaser.Scene {
     routeSwitch.setTexture('switch_on');
     routeSwitch.refreshBody();
     this.deactivateSawBarrier(routeSwitch.barrierId);
+    this.activatedRouteSwitches += 1;
+    this.updateObjectiveHud();
     this.cameras.main.shake(160, 0.0035);
     this.cameras.main.flash(120, 80, 255, 180);
+
+    if (this.activatedRouteSwitches >= this.totalRouteSwitches) {
+      this.showObjectivePulse('Rota final liberada. Corra para o nucleo.');
+    } else {
+      this.showObjectivePulse('Switch ativado. Uma barreira caiu.');
+    }
   }
 
   restartPhase(delay = 120) {
@@ -784,11 +906,16 @@ export default class Fase2 extends Phaser.Scene {
     }
   }
 
-  spawnEnemyBullet(x, y, direction) {
-    const bullet = new Bullet(this, x, y, direction, { owner: 'enemy', speed: 340, tint: 0xff7b7b });
+  spawnEnemyBullet(x, y, direction, options = {}) {
+    const speed = options.speed ?? 360;
+    const bullet = new Bullet(this, x, y, direction, {
+      owner: 'enemy',
+      speed,
+      tint: options.tint ?? 0xff7b7b
+    });
     this.enemyBullets.add(bullet);
     bullet.body.setAllowGravity(false);
-    bullet.setVelocityX(direction === 'left' ? -340 : 340);
+    bullet.setVelocityX(direction === 'left' ? -speed : speed);
     return bullet;
   }
 }

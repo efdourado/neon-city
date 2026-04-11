@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "servor --reload"
+    "start": "node node_modules/servor/cli.js --reload"
   },
   "dependencies": {
     "servor": "^4.0.2"
