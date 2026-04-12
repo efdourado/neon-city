@@ -11,7 +11,7 @@ export default class FaseFinal extends Phaser.Scene {
     this.load.image('bg_boss_scene', 'assets/bg/bg_boss.png');
     this.load.image('floor_mid', 'assets/tiles/Tiles/Tile (2).png');
     this.load.image('acid', 'assets/tiles/Tiles/Acid (1).png');
-    this.load.image('data_core', 'assets/tiles/Objects/CartaoAcesso.png');
+    this.load.image('data_core', 'assets/tiles/Objects/dataCore.png');
 
     this.load.spritesheet('nova', 'assets/player/Idle1.png', { frameWidth: 48, frameHeight: 48 });
     this.load.spritesheet('nova_run', 'assets/player/Run1.png', { frameWidth: 48, frameHeight: 48 });
@@ -320,7 +320,7 @@ export default class FaseFinal extends Phaser.Scene {
     const coreY = Math.min(sourceY - 70, middlePlatform.standY - 84);
     const core = this.dataCores.create(coreX, coreY, 'data_core');
 
-    core.setScale(0.3);
+    core.setScale(0.2);
     core.setDepth(34);
     core.body.setAllowGravity(false);
     core.body.setImmovable(true);
