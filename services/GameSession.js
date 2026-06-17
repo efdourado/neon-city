@@ -3,6 +3,15 @@ const RANKING_KEY = 'neon-city-ranking';
 const PLAYER_NAME_KEY = 'neon-city-player-name';
 const MAX_RANKING_ENTRIES = 10;
 
+// Este modulo concentra o fluxo de dados da run:
+// 1. cria/recupera a run atual no localStorage;
+// 2. registra eventos das fases (inicio, conclusao, dano e mortes);
+// 3. finaliza a run, calcula score e atualiza o ranking local;
+// 4. monta um payload resumido para o POST opcional ao n8n.
+//
+// Importante: o ranking e totalmente local. O n8n nao decide ranking, nao salva
+// score no navegador e nao recebe a lista completa de colocacoes.
+
 const PHASE_LABELS = {
   fase1: 'Telhados de Neon',
   fase2: 'Laboratorio Subterraneo',
@@ -10,6 +19,8 @@ const PHASE_LABELS = {
 };
 
 function getStorage() {
+  // Alguns navegadores/modos privados podem bloquear localStorage. O jogo segue
+  // funcionando sem persistencia, usando os fallbacks das funcoes de leitura.
   try {
     return window.localStorage;
   } catch (error) {
@@ -45,6 +56,8 @@ function now() {
 }
 
 function createRun(playerName = getPlayerName()) {
+  // A run e a unidade de pontuacao: nasce quando o jogador inicia a Fase 1 e
+  // termina somente quando o Data-Core e coletado na fase final.
   return {
     id: `run-${now()}-${Math.round(Math.random() * 9999)}`,
     playerName: normalizePlayerName(playerName),
@@ -92,6 +105,7 @@ export function setPlayerName(name) {
 }
 
 export function startRun(playerName = getPlayerName()) {
+  // Reinicia a tentativa ativa e apaga o progresso parcial anterior.
   return saveRun(createRun(playerName));
 }
 
@@ -109,6 +123,9 @@ export function getCurrentRun() {
 }
 
 export function recordPhaseStart(phaseKey) {
+  // Chamado no create() de cada fase. Se a fase ja tinha sido concluida e for
+  // reaberta, ela volta a ficar "em andamento"; mortes dentro da mesma fase
+  // continuam contando no intervalo da run.
   const run = ensureRun();
   const phase = run.phases[phaseKey] ?? {
     label: PHASE_LABELS[phaseKey] ?? phaseKey,
@@ -128,6 +145,8 @@ export function recordPhaseStart(phaseKey) {
 }
 
 export function recordPhaseComplete(phaseKey) {
+  // Completar uma fase incrementa objectives; este contador vira bonus no score
+  // e tambem entra no JSON enviado ao n8n.
   const run = ensureRun();
   const phase = run.phases[phaseKey] ?? {
     label: PHASE_LABELS[phaseKey] ?? phaseKey,
@@ -146,6 +165,7 @@ export function recordPhaseComplete(phaseKey) {
 }
 
 export function recordDamage(phaseKey) {
+  // Conta dano por fase e no total. O valor total penaliza o score.
   const run = ensureRun();
   const phase = run.phases[phaseKey] ?? {
     label: PHASE_LABELS[phaseKey] ?? phaseKey,
@@ -162,6 +182,7 @@ export function recordDamage(phaseKey) {
 }
 
 export function recordDeath(phaseKey) {
+  // Conta mortes por fase e no total. O valor total penaliza mais que dano.
   const run = ensureRun();
   const phase = run.phases[phaseKey] ?? {
     label: PHASE_LABELS[phaseKey] ?? phaseKey,
@@ -178,6 +199,8 @@ export function recordDeath(phaseKey) {
 }
 
 export function finishRun() {
+  // A ordem e intencional: primeiro salva score/ranking local, depois a cena
+  // final tenta chamar o n8n. Assim uma falha no webhook nunca perde a run.
   const run = ensureRun();
   if (run.completed) {
     return run;
@@ -204,6 +227,8 @@ function calculateScore(run) {
 }
 
 function saveRankingEntry(run) {
+  // Ranking local: lista top 10 no localStorage do proprio navegador. Nao ha
+  // backend, sincronizacao entre maquinas, nem dependencia da resposta do n8n.
   const ranking = getRanking();
   const entry = toRankingEntry(run);
   const filteredRanking = ranking.filter((item) => item.id !== entry.id);
@@ -248,6 +273,9 @@ export function formatDuration(durationMs) {
 }
 
 export function buildRunPayload(run) {
+  // JSON enviado no POST ao webhook n8n. Ele contem apenas o resumo da run
+  // finalizada; nao envia ranking completo, URL do webhook, localStorage bruto
+  // nem nenhuma chave de API.
   return {
     event: 'neon_city_run_finished',
     game: 'Neon City',

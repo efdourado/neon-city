@@ -103,6 +103,8 @@ export default class Ranking extends Phaser.Scene {
       const currentUrl = getConnectionStatus().webhookUrl;
       const webhookUrl = window.prompt('URL do Webhook n8n:', currentUrl);
       if (webhookUrl !== null) {
+        // Apenas a URL do Webhook e guardada localmente. O ranking nao e enviado
+        // daqui; o POST acontece somente ao vencer a fase final.
         setWebhookUrl(webhookUrl);
         this.refreshTexts();
       }
@@ -131,6 +133,8 @@ export default class Ranking extends Phaser.Scene {
   }
 
   refreshTexts() {
+    // Esta tela sempre le o ranking do localStorage. A conexao n8n exibida aqui
+    // e so o status da URL configurada para o comentario da IA na vitoria.
     const connection = getConnectionStatus();
     const webhookLabel = connection.configured ? 'n8n conectado' : 'n8n pendente';
     const webhookUrl = connection.webhookUrl ? this.compactUrl(connection.webhookUrl) : 'sem webhook';

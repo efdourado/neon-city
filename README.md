@@ -137,6 +137,17 @@ O n8n entra como Backend REST + Agente de IA. O jogo envia um `POST` para um Web
 
 Se uma chave da OpenAI foi compartilhada em chat, GitHub, video ou print, revogue a chave e gere outra antes de usar.
 
+#### Fluxo completo
+
+1. `startRun()` cria uma run no `localStorage` quando o jogador inicia.
+2. Cada fase chama `recordPhaseStart()`, `recordPhaseComplete()`, `recordDamage()` e `recordDeath()` para atualizar a run.
+3. Ao coletar o Data-Core, `finishRun()` calcula score e salva o ranking local antes de qualquer chamada externa.
+4. `buildRunPayload()` monta apenas o resumo da run finalizada.
+5. `submitRunToAgent()` envia esse resumo por `POST` para o Webhook n8n, se houver URL configurada.
+6. A resposta do n8n aparece como comentario da IA. Ela nao altera o ranking.
+
+O ranking e 100% local ao navegador: fica em `localStorage`, nao e sincronizado entre computadores e nao depende do n8n. O n8n recebe somente o payload da run finalizada para gerar comentario/analise.
+
 #### Como configurar no jogo
 
 Existem duas formas:
