@@ -2,6 +2,12 @@ import Player from '../entities/Player.js';
 import Bullet from '../entities/Bullet.js';
 import Bot1 from '../entities/Bot1.js';
 import Saw from '../entities/Saw.js';
+import {
+  recordDamage,
+  recordDeath,
+  recordPhaseComplete,
+  recordPhaseStart
+} from '../services/GameSession.js';
 
 export default class Fase1 extends Phaser.Scene {
   constructor () {
@@ -84,6 +90,7 @@ export default class Fase1 extends Phaser.Scene {
     this.exitDoorState = 'locked';
     this.isTransitioning = false;
     this.devOverlayVisible = false;
+    recordPhaseStart('fase1');
 
     // cria as plataformas
     this.platforms = this.physics.add.staticGroup();
@@ -222,6 +229,7 @@ export default class Fase1 extends Phaser.Scene {
       // morte
       if (this.player.y > 800) 
       {
+        recordDeath('fase1');
         this.scene.restart();
       }
     }
@@ -727,6 +735,7 @@ export default class Fase1 extends Phaser.Scene {
       this.cameras.main.fadeOut(250, 0, 0, 0);
     });
     this.time.delayedCall(1250, () => {
+      recordPhaseComplete('fase1');
       this.scene.start('Fase2');
     });
   }
@@ -738,6 +747,7 @@ export default class Fase1 extends Phaser.Scene {
       return;
     }
 
+    recordDamage('fase1');
     this.health -= 1;
     this.invulnerableUntil = now + 800;
     this.updateHealthBar();
@@ -757,6 +767,7 @@ export default class Fase1 extends Phaser.Scene {
     });
 
     if (this.health <= 0) {
+      recordDeath('fase1');
       this.time.delayedCall(150, () => {
         this.scene.restart();
       });
