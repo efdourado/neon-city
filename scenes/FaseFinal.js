@@ -371,8 +371,6 @@ export default class FaseFinal extends Phaser.Scene {
 
     this.isVictoryClaimed = true;
     recordPhaseComplete('faseFinal');
-    // finishRun calcula o score e grava o ranking local antes do envio ao n8n.
-    // Se o webhook estiver vazio/offline, o placar continua salvo normalmente.
     const finishedRun = finishRun();
     core.disableBody(true, true);
     this.bossBullets.clear(true, true);
@@ -460,8 +458,6 @@ export default class FaseFinal extends Phaser.Scene {
   }
 
   submitVictoryToAgent(run) {
-    // O payload e um resumo da run atual. O n8n recebe esse JSON para gerar
-    // comentario/analise, mas nao participa do calculo do ranking local.
     const payload = buildRunPayload(run);
 
     submitRunToAgent(payload).then((result) => {

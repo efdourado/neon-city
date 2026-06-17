@@ -1,11 +1,6 @@
 const WEBHOOK_KEY = 'neon-city-n8n-webhook';
 const REQUEST_TIMEOUT_MS = 9000;
 
-// Este modulo e a ponte opcional com o n8n.
-// O frontend guarda somente a URL do Webhook e envia o payload da run via POST.
-// Credenciais de OpenAI, prompts longos e persistencia remota devem ficar no
-// workflow n8n, nunca neste repositorio nem no navegador.
-
 function getStorage() {
   try {
     return window.localStorage;
@@ -38,10 +33,6 @@ function normalizeUrl(url) {
 }
 
 export function getWebhookUrl() {
-  // Ordem de prioridade para facilitar testes:
-  // 1. window.NEON_CITY_N8N_WEBHOOK, caso index.html injete a URL;
-  // 2. query string ?n8n=... ou ?webhook=..., que tambem salva no navegador;
-  // 3. ultima URL configurada na tela de ranking.
   const globalUrl = normalizeUrl(window.NEON_CITY_N8N_WEBHOOK);
   if (globalUrl) {
     return globalUrl;
@@ -57,8 +48,6 @@ export function getWebhookUrl() {
 }
 
 export function setWebhookUrl(url) {
-  // Salva ou limpa apenas a URL do webhook. Esta informacao e local ao
-  // navegador e nao altera o ranking nem o estado da run.
   const webhookUrl = normalizeUrl(url);
   const storage = getStorage();
 
@@ -80,9 +69,6 @@ export function getConnectionStatus() {
 }
 
 export async function submitRunToAgent(payload) {
-  // A cena final passa aqui o objeto criado por buildRunPayload(run).
-  // O POST envia JSON puro para o n8n e espera texto ou JSON como resposta.
-  // Qualquer erro vira um status amigavel; a run ja foi salva localmente antes.
   const webhookUrl = getWebhookUrl();
   if (!webhookUrl) {
     return {
@@ -137,7 +123,6 @@ export async function submitRunToAgent(payload) {
 }
 
 function parseResponseBody(text) {
-  // O n8n pode responder JSON pelo node "Respond to Webhook" ou texto puro.
   if (!text) {
     return {};
   }
@@ -150,7 +135,6 @@ function parseResponseBody(text) {
 }
 
 function extractAgentMessage(body) {
-  // Aceita os nomes mais comuns usados por Webhook/AI Agent/Respond nodes.
   if (typeof body === 'string') {
     return body;
   }
