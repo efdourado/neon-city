@@ -1,6 +1,17 @@
 import Player from '../entities/Player.js';
 import BotFinal from '../entities/BotFinal.js';
 import Bullet from '../entities/Bullet.js';
+import {
+  buildRunPayload,
+  finishRun,
+  formatDuration,
+  getRanking,
+  recordDamage,
+  recordDeath,
+  recordPhaseComplete,
+  recordPhaseStart
+} from '../services/GameSession.js';
+import { submitRunToAgent } from '../services/N8nAgent.js';
 
 export default class FaseFinal extends Phaser.Scene {
   constructor() {
@@ -39,6 +50,7 @@ export default class FaseFinal extends Phaser.Scene {
     this.isRespawning = false;
     this.isVictoryUnlocked = false;
     this.isVictoryClaimed = false;
+    recordPhaseStart('faseFinal');
 
     const bg = this.add.image(this.worldWidth / 2, this.screenHeight / 2, 'bg_boss_scene');
     bg.setDisplaySize(this.worldWidth, this.screenHeight);
@@ -358,6 +370,8 @@ export default class FaseFinal extends Phaser.Scene {
     }
 
     this.isVictoryClaimed = true;
+    recordPhaseComplete('faseFinal');
+    const finishedRun = finishRun();
     core.disableBody(true, true);
     this.bossBullets.clear(true, true);
     this.updateObjectiveHud('Dataset final reivindicado');
@@ -366,16 +380,17 @@ export default class FaseFinal extends Phaser.Scene {
     this.player.play('idle', true);
     this.cameras.main.stopFollow();
     this.cameras.main.flash(300, 255, 255, 255);
-    this.showVictoryScreen();
+    this.showVictoryScreen(finishedRun);
+    this.submitVictoryToAgent(finishedRun);
   }
 
-  showVictoryScreen() {
+  showVictoryScreen(run) {
     const overlay = this.add.rectangle(0, 0, this.screenWidth, this.screenHeight, 0x03030a, 0.82)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(100);
 
-    const title = this.add.text(this.screenWidth / 2, 230, 'DATA-CORE RECUPERADO', {
+    const title = this.add.text(this.screenWidth / 2, 150, 'DATA-CORE RECUPERADO', {
       fontFamily: '"Orbitron", monospace',
       fontSize: '48px',
       color: '#ffffff',
@@ -387,12 +402,18 @@ export default class FaseFinal extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
 
-    const body = this.add.text(this.screenWidth / 2, 320, [
+    const position = getRanking().findIndex((entry) => entry.id === run.id) + 1;
+    const rankingLabel = position > 0 ? `Ranking local: #${position}` : 'Ranking local atualizado';
+    const body = this.add.text(this.screenWidth / 2, 250, [
       'Dataset final reivindicado.',
-      'Neon City respira de novo.'
+      'Neon City respira de novo.',
+      '',
+      `Score: ${run.score} pts`,
+      `Tempo: ${formatDuration(run.durationMs)} | KOs: ${run.counters.deaths} | Dano: ${run.counters.damageTaken}`,
+      rankingLabel
     ], {
       fontFamily: '"Courier New", monospace',
-      fontSize: '26px',
+      fontSize: '24px',
       color: '#dffcff',
       stroke: '#000000',
       strokeThickness: 4,
@@ -403,7 +424,21 @@ export default class FaseFinal extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
 
-    const restart = this.add.text(this.screenWidth / 2, 440, 'R reinicia | M menu', {
+    this.victoryAgentText = this.add.text(this.screenWidth / 2, 470, 'Agente IA: enviando run para o n8n...', {
+      fontFamily: '"Courier New", monospace',
+      fontSize: '19px',
+      color: '#ffffff',
+      backgroundColor: 'rgba(0, 0, 0, 0.52)',
+      padding: { x: 18, y: 14 },
+      align: 'center',
+      lineSpacing: 8,
+      wordWrap: { width: 720, useAdvancedWrap: true }
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(101);
+
+    const restart = this.add.text(this.screenWidth / 2, 658, 'R reinicia | M menu', {
       fontFamily: '"Courier New", monospace',
       fontSize: '22px',
       color: '#ff8bd9',
@@ -415,11 +450,31 @@ export default class FaseFinal extends Phaser.Scene {
       .setDepth(101);
 
     this.tweens.add({
-      targets: [overlay, title, body, restart],
+      targets: [overlay, title, body, this.victoryAgentText, restart],
       alpha: { from: 0, to: 1 },
       duration: 360,
       ease: 'Sine.easeOut'
     });
+  }
+
+  submitVictoryToAgent(run) {
+    const payload = buildRunPayload(run);
+
+    submitRunToAgent(payload).then((result) => {
+      if (!this.victoryAgentText?.active) {
+        return;
+      }
+
+      const title = result.ok ? 'Agente IA:' : 'IA offline:';
+      this.victoryAgentText.setText(`${title} ${this.formatAgentMessage(result.message)}`);
+    });
+  }
+
+  formatAgentMessage(message) {
+    return String(message ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 280);
   }
 
   handlePlayerDamage(sourceX) {
@@ -427,6 +482,7 @@ export default class FaseFinal extends Phaser.Scene {
       return;
     }
 
+    recordDamage('faseFinal');
     this.health -= 1;
     this.invulnerableUntil = this.time.now + 800;
     this.updateHealthBar();
@@ -454,6 +510,7 @@ export default class FaseFinal extends Phaser.Scene {
     }
 
     this.isRespawning = true;
+    recordDeath('faseFinal');
     this.health = 0;
     this.updateHealthBar();
     this.player.setVelocity(0, 0);

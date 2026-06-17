@@ -1,3 +1,5 @@
+import { startRun } from '../services/GameSession.js';
+
 export default class Menu extends Phaser.Scene {
   constructor() {
     super({ key: 'Menu' });
@@ -144,9 +146,11 @@ export default class Menu extends Phaser.Scene {
     
     // ------ menu ---------------------------------------
     const menuOptions = [ {
-      text: 'Iniciar', key: 'start', yOffset: 80, shortcut: ' Enter '
+      text: 'Iniciar', key: 'start', yOffset: 70, shortcut: ' Enter '
       }, {
-      text: 'Instruções', key: 'instructions', yOffset: 150, shortcut: ' I '
+      text: 'Instruções', key: 'instructions', yOffset: 135, shortcut: ' I '
+      }, {
+      text: 'Ranking', key: 'ranking', yOffset: 200, shortcut: ' R '
     } ];
 
     let selectedIndex = 0;
@@ -244,9 +248,12 @@ export default class Menu extends Phaser.Scene {
         onComplete: () => {
           flash.destroy();
           if (key === 'start') {
+            startRun();
             this.scene.start('Fase1');
           } else if (key === 'instructions') {
             this.scene.start('Instructions');
+          } else if (key === 'ranking') {
+            this.scene.start('Ranking');
     } } }); };
     
     this.selectMenuItem(0);
@@ -267,15 +274,20 @@ export default class Menu extends Phaser.Scene {
     this.handleInstructionsKey = () => {
       this.activateOption('instructions');
     };
+    this.handleRankingKey = () => {
+      this.activateOption('ranking');
+    };
     this.input.keyboard.on('keydown-UP', this.handleUpKey);
     this.input.keyboard.on('keydown-DOWN', this.handleDownKey);
     this.input.keyboard.on('keydown-ENTER', this.handleEnterKey);
     this.input.keyboard.on('keydown-I', this.handleInstructionsKey);
+    this.input.keyboard.on('keydown-R', this.handleRankingKey);
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown-UP', this.handleUpKey);
       this.input.keyboard.off('keydown-DOWN', this.handleDownKey);
       this.input.keyboard.off('keydown-ENTER', this.handleEnterKey);
       this.input.keyboard.off('keydown-I', this.handleInstructionsKey);
+      this.input.keyboard.off('keydown-R', this.handleRankingKey);
     });
     // ---------------------------------------------------
 

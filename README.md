@@ -31,8 +31,19 @@ O jogo está completo como experiência jogável: possui menu inicial, tela de i
 | Navegar no menu | Setas para cima e baixo |
 | Confirmar opção selecionada | Enter |
 | Abrir instruções pelo menu | I |
+| Abrir ranking pelo menu | R |
 | Selecionar opção | Mouse |
 | Voltar das instruções para o menu | Esc |
+
+### Ranking e IA
+
+| Ação | Tecla ou entrada |
+| --- | --- |
+| Abrir ranking | R no menu |
+| Iniciar pelo ranking | Enter |
+| Configurar jogador | P na tela de ranking |
+| Configurar Webhook n8n | N na tela de ranking |
+| Limpar ranking local | C na tela de ranking |
 
 ### Atalhos de desenvolvimento
 
@@ -106,6 +117,89 @@ Cada fase mostra informações relevantes ao jogador:
 | Barra de vida do boss | Fase final |
 | Pulsos de objetivo | Durante eventos importantes |
 | Painel dev | Com a tecla D |
+| Score, ranking e comentario da IA | Tela de ranking e vitoria final |
+
+### Ranking
+
+O jogo registra uma run completa desde o inicio da Fase 1 ate a coleta do Data-Core. Ao vencer, ele calcula:
+
+- tempo total;
+- mortes;
+- dano recebido;
+- objetivos concluidos;
+- score final.
+
+O ranking local fica salvo no `localStorage` do navegador. Isso evita depender de banco para demonstrar a mecanica, mas ainda permite apresentar placar por tempo e score durante o video.
+
+### Integracao n8n + agente de IA
+
+O n8n entra como Backend REST + Agente de IA. O jogo envia um `POST` para um Webhook n8n quando a run termina. A credencial da OpenAI deve ficar somente no n8n, nunca no frontend, no GitHub ou em arquivos publicos do projeto.
+
+Se uma chave da OpenAI foi compartilhada em chat, GitHub, video ou print, revogue a chave e gere outra antes de usar.
+
+#### Como configurar no jogo
+
+Existem duas formas:
+
+1. Abra a tela de ranking e pressione `N` para colar a URL do Webhook n8n.
+2. Passe a URL pela query string:
+
+```text
+http://localhost:8080/?n8n=https://SEU-N8N/webhook/neon-city-agent
+```
+
+O jogo salva a URL no `localStorage` do navegador. Para trocar, volte ao ranking e pressione `N` novamente.
+
+#### Payload enviado ao Webhook
+
+```json
+{
+  "event": "neon_city_run_finished",
+  "game": "Neon City",
+  "playerName": "Nova",
+  "score": 10120,
+  "durationSeconds": 315,
+  "deaths": 2,
+  "damageTaken": 7,
+  "objectivesCompleted": 3,
+  "phases": [
+    {
+      "key": "fase1",
+      "label": "Telhados de Neon",
+      "durationSeconds": 85,
+      "deaths": 1,
+      "damageTaken": 3
+    }
+  ]
+}
+```
+
+#### Resposta esperada do n8n
+
+O jogo aceita texto puro ou JSON. O formato recomendado e:
+
+```json
+{
+  "message": "Run aprovada. Voce venceu rapido, mas tomou muito dano na fase do laboratorio."
+}
+```
+
+Tambem sao aceitos os campos `reply`, `analysis`, `output` ou `text`.
+
+#### Workflow sugerido no n8n
+
+1. Crie um node `Webhook` com metodo `POST`.
+2. Conecte o Webhook a um node de IA ou `AI Agent` usando a credencial OpenAI cadastrada no proprio n8n.
+3. Use um prompt como:
+
+```text
+Voce e o agente tecnico de Neon City. Analise a run recebida em JSON.
+Responda em portugues, em ate 2 frases, comentando score, tempo, mortes e dano.
+Se a run foi boa, elogie objetivamente. Se teve muitas mortes ou dano, de uma dica curta.
+Retorne apenas JSON no formato {"message":"..."}.
+```
+
+4. Finalize com `Respond to Webhook`, retornando o JSON gerado pelo agente.
 
 ## Como rodar localmente
 

@@ -2,6 +2,12 @@ import Player from '../entities/Player.js';
 import Bullet from '../entities/Bullet.js';
 import Bot1 from '../entities/Bot1.js';
 import Saw from '../entities/Saw.js';
+import {
+  recordDamage,
+  recordDeath,
+  recordPhaseComplete,
+  recordPhaseStart
+} from '../services/GameSession.js';
 
 export default class Fase2 extends Phaser.Scene {
   constructor () {
@@ -90,6 +96,7 @@ export default class Fase2 extends Phaser.Scene {
     this.devOverlayVisible = false;
     this.totalRouteSwitches = 2;
     this.activatedRouteSwitches = 0;
+    recordPhaseStart('fase2');
 
     this.platformOccupancy = new Set();
     this.platformTopByX = new Map();
@@ -612,6 +619,7 @@ export default class Fase2 extends Phaser.Scene {
     this.cameras.main.setZoom(1);
     this.cameras.main.fadeOut(520, 145, 145, 145);
     this.time.delayedCall(560, () => {
+      recordPhaseComplete('fase2');
       this.scene.start('FaseFinal');
     });
   }
@@ -870,6 +878,7 @@ export default class Fase2 extends Phaser.Scene {
     }
 
     this.isRespawning = true;
+    recordDeath('fase2');
     this.tweens.killTweensOf(this.player);
     this.player?.setAlpha(1);
     this.player?.setVelocity(0, 0);
@@ -885,6 +894,7 @@ export default class Fase2 extends Phaser.Scene {
       return;
     }
 
+    recordDamage('fase2');
     this.health -= 1;
     this.invulnerableUntil = this.time.now + 800;
     this.updateHealthBar();

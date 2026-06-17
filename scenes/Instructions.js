@@ -1,3 +1,5 @@
+import { startRun } from '../services/GameSession.js';
+
 export default class Instructions extends Phaser.Scene {
   constructor() {
     super({ key: 'Instructions' });
@@ -132,6 +134,7 @@ export default class Instructions extends Phaser.Scene {
       '  Setas - Movimentos | SHIFT - Corrida | ESPAÇO - Disparo ',
       '  M - Menu | Ç - Fase 2',
       '  D - Status | L (na Fase 2) - Corredor final',
+      '  Ranking: tempo, score e comentario do agente IA via n8n',
       '',
       '| Dev: use ?debug=1 na URL para ver hitboxes da física',
       '',
@@ -233,6 +236,7 @@ export default class Instructions extends Phaser.Scene {
       this.cameras.main.flash(150, 255, 255, 255);
       this.time.delayedCall(150, () => {
         if (key === 'start') {
+          startRun();
           this.scene.start('Fase1');
         } else if (key === 'back') {
           this.scene.start('Menu');
